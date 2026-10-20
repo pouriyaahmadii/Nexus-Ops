@@ -1,0 +1,38 @@
+name: Feature Request
+description: Suggest an idea or enhancement for NexusOps
+title: "[FEAT]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please outline your proposal for improving NexusOps.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Motivation
+      description: Is your feature request related to a problem? Please describe.
+      placeholder: I'm always frustrated when...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like to see implemented.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or features you've considered.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checklists
+    attributes:
+      label: Checklist
+      options:
+        - label: This suggestion adheres to the zero-trust network segmentation and isolation principles of NexusOps.
+          required: true

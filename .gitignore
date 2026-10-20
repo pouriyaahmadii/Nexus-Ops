@@ -1,0 +1,50 @@
+# Environment configurations
+.env
+.env.*
+!.env.example
+
+# Local volumes & persistent runtime data
+data/
+volumes/
+storage/
+postgres_data/
+redis_data/
+qdrant_data/
+n8n_data/
+
+# Backups & dumps
+backups/
+*.dump
+*.tar.gz
+*.sql.gz
+
+# Logs
+logs/
+*.log
+
+# Traefik local certificates & ACME state
+acme.json
+certs/
+*.pem
+*.key
+*.crt
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor & IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+.tmp/

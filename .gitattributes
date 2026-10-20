@@ -1,2 +1,13 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Auto-detect text files and perform LF normalization
+* text=auto eol=lf
+
+# Explicitly normalize shell scripts and makefiles
+*.sh text eol=lf
+Makefile text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+# Preserve raw workflow JSON files as primary code for GitHub Linguist
+workflows/*.json linguist-generated=false

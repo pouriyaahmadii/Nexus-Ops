@@ -1,5 +1,5 @@
 # ==============================================================================
-# NexusOps - Production Automation Platform Makefile
+# AutoForge / NexusOps - Automation Platform Makefile
 # ==============================================================================
 SHELL := /bin/bash
 .SHELLFLAGS := -euo pipefail -c
@@ -7,7 +7,7 @@ SHELL := /bin/bash
 
 COMPOSE_PROJECT_NAME ?= nexusops
 
-.PHONY: help up down logs ps doctor config backup restore-test demo lint
+.PHONY: help up down logs doctor backup restore-test demo lint
 
 help: ## Print this formatted list of targets with descriptions
 	@echo "NexusOps Management CLI"
@@ -16,25 +16,17 @@ help: ## Print this formatted list of targets with descriptions
 	@echo "Targets:"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-up: ## Start the platform services in background
-	@echo "==> Starting NexusOps services under namespace $(COMPOSE_PROJECT_NAME)..."
-	docker compose -p $(COMPOSE_PROJECT_NAME) up -d
+up: ## Start the platform services (Phase 2+)
+	@echo "[up] Placeholder: Service definitions will be introduced in Phase 2."
 
-down: ## Stop and remove all platform containers
-	@echo "==> Stopping NexusOps services..."
-	docker compose -p $(COMPOSE_PROJECT_NAME) down --remove-orphans
+down: ## Stop and remove all platform containers (Phase 2+)
+	@echo "[down] Placeholder: Service teardown will be introduced in Phase 2."
 
-logs: ## Follow logs from running platform services
-	docker compose -p $(COMPOSE_PROJECT_NAME) logs -f
+logs: ## Follow logs from running platform services (Phase 2+)
+	@echo "[logs] Placeholder: Service log tailing will be introduced in Phase 2."
 
-ps: ## List running platform services and health status
-	docker compose -p $(COMPOSE_PROJECT_NAME) ps
-
-doctor: ## Run diagnostic checks on system requirements and ports
-	@./scripts/doctor.sh
-
-config: ## Validate docker compose specification
-	docker compose -p $(COMPOSE_PROJECT_NAME) config -q
+doctor: ## Run diagnostic checks on system requirements and ports (Phase 10)
+	@echo "[doctor] Placeholder: Host diagnostics and port checks will be introduced in Phase 10."
 
 backup: ## Trigger encrypted database and config backup (Phase 5)
 	@echo "[backup] Placeholder: Backup automation will be introduced in Phase 5."

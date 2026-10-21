@@ -1,0 +1,342 @@
+{
+  "name": "Retry with Backoff",
+  "nodes": [
+    {
+      "parameters": {
+        "fields": {
+          "string": [
+            {
+              "name": "target_url",
+              "value": "={{ $json.target_url || $getEnv('RETRY_TARGET_URL') }}"
+            },
+            {
+              "name": "method",
+              "value": "={{ $json.method || 'POST' }}"
+            },
+            {
+              "name": "body",
+              "value": "={{ JSON.stringify($json.body || {}) }}"
+            },
+            {
+              "name": "max_attempts",
+              "value": "={{ $json.max_attempts || 3 }}"
+            },
+            {
+              "name": "base_delay_ms",
+              "value": "={{ $json.base_delay_ms || 1000 }}"
+            },
+            {
+              "name": "factor",
+              "value": "={{ $json.factor || 2 }}"
+            },
+            {
+              "name": "jitter",
+              "value": "={{ $json.jitter || 0.1 }}"
+            }
+          ]
+        }
+      },
+      "id": "validate-input",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const maxAttempts = parseInt($json.max_attempts, 10);\nconst baseDelay = parseInt($json.base_delay_ms, 10);\nconst factor = parseFloat($json.factor);\nconst jitter = parseFloat($json.jitter);\n\nreturn Array.from({ length: maxAttempts }, (_, i) => ({\n  json: {\n    attempt: i + 1,\n    max_attempts: maxAttempts,\n    delay_ms: Math.floor(baseDelay * Math.pow(factor, i) * (1 + (Math.random() * 2 - 1) * jitter)),\n    target_url: $json.target_url,\n    method: $json.method,\n    body: $json.body,\n    headers: $json.headers || {}\n  }\n}));"
+      },
+      "id": "generate-attempts",
+      "name": "Generate Attempts",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "split-attempts",
+      "name": "Split Attempts",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1.1,
+      "position": [680, 300],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.target_url }}",
+        "method": "={{ $json.method }}",
+        "jsonParameters": true,
+        "options": {
+          "timeout": 30000,
+          "redirect": {}
+        },
+        "headerParametersJson": "={{ JSON.stringify($json.headers) }}",
+        "bodyParametersJson": "={{ $json.body }}"
+      },
+      "id": "http-request",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const response = $json;\nconst statusCode = response.statusCode || response.httpCode;\n\n// Determine if error is retryable\nconst retryableStatuses = [408, 429, 500, 502, 503, 504];\nconst isRetryable = retryableStatuses.includes(statusCode) || \n  (response.error && /network|timeout|econnrefused|etimedout/i.test(response.error.message || ''));\n\n// Check for Retry-After header\nlet retryAfterDelay = null;\nif (response.headers && response.headers['retry-after']) {\n  const ra = response.headers['retry-after'];\n  retryAfterDelay = parseInt(ra, 10) * 1000;\n  if (!isNaN(retryAfterDelay)) {\n    // Use Retry-After if provided\n  }\n}\n\nreturn [{\n  json: {\n    ...response,\n    is_retryable: isRetryable,\n    retry_after_delay: retryAfterDelay,\n    attempt: $json.attempt,\n    max_attempts: $json.max_attempts,\n    delay_ms: $json.delay_ms\n  }\n}];"
+      },
+      "id": "check-retry",
+      "name": "Check Retryable",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.is_retryable === true }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-retryable",
+      "name": "If Retryable",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const delay = $json.retry_after_delay || $json.delay_ms;\nreturn [{ json: { delay_ms: delay } }];"
+      },
+      "id": "calc-delay",
+      "name": "Calculate Delay",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [1560, 100]
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.delay_ms }}",
+        "unit": "milliseconds"
+      },
+      "id": "wait",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1780, 100]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { success: true, data: $json } }];"
+      },
+      "id": "success",
+      "name": "Success",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "const error = {\n  message: $json.error || `HTTP ${$json.statusCode}: ${$json.statusMessage || 'Unknown Error'}`,\n  stack: $json.stack || '',\n  statusCode: $json.statusCode,\n  response: $json\n};\nreturn [{ json: { error, failed: true, attempt: $json.attempt, max_attempts: $json.max_attempts } }];"
+      },
+      "id": "prepare-failure",
+      "name": "Prepare Failure",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "ops",
+        "table": "dead_letters",
+        "columns": [
+          "workflow_id",
+          "workflow_name",
+          "execution_id",
+          "node_name",
+          "error_message",
+          "error_stack",
+          "payload",
+          "attempts",
+          "status",
+          "notes"
+        ],
+        "options": {}
+      },
+      "id": "insert-dlq-failure",
+      "name": "Insert DLQ on Exhaustion",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [1560, 400],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { success: false, error: $json.error, exhausted: true } }];"
+      },
+      "id": "failure-result",
+      "name": "Failure Result",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [1780, 400]
+    }
+  ],
+  "connections": {
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Generate Attempts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Attempts": {
+      "main": [
+        [
+          {
+            "node": "Split Attempts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Attempts": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Check Retryable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Retryable": {
+      "main": [
+        [
+          {
+            "node": "If Retryable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Retryable": {
+      "main": [
+        [
+          {
+            "node": "Calculate Delay",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Delay": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Split Attempts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Success": {
+      "main": [
+        []
+      ]
+    },
+    "If Retryable": {
+      "main": [
+        [
+          {
+            "node": "Prepare Failure",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Failure": {
+      "main": [
+        [
+          {
+            "node": "Insert DLQ on Exhaustion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert DLQ on Exhaustion": {
+      "main": [
+        [
+          {
+            "node": "Failure Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failure Result": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "retry-with-backoff",
+  "tags": ["core", "retry", "utility"]
+}

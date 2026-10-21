@@ -1,0 +1,154 @@
+{
+  "name": "Healthcheck Ping",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 5,
+              "unit": "minutes"
+            }
+          ]
+        }
+      },
+      "id": "schedule",
+      "name": "Schedule (every 5 min)",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const heartbeatUrl = $getEnv('BACKUP_HEARTBEAT_URL') || $getEnv('HEALTHCHECK_PING_URL');\n\nif (!heartbeatUrl) {\n  return [{ json: { skipped: true, reason: 'No heartbeat URL configured' } }];\n}\n\nreturn [{ json: { url: heartbeatUrl, timestamp: new Date().toISOString() } }];"
+      },
+      "id": "prepare-ping",
+      "name": "Prepare Ping",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !$json.skipped }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-url",
+      "name": "If URL Configured",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "method": "GET",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "http-ping",
+      "name": "HTTP Ping",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { success: true, status: $json.statusCode, timestamp: new Date().toISOString() } }];"
+      },
+      "id": "ping-success",
+      "name": "Ping Success",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { success: false, error: $json.error, timestamp: new Date().toISOString() } }];"
+      },
+      "id": "ping-failure",
+      "name": "Ping Failure",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [1120, 400]
+    }
+  ],
+  "connections": {
+    "Schedule (every 5 min)": {
+      "main": [
+        [
+          {
+            "node": "Prepare Ping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Ping": {
+      "main": [
+        [
+          {
+            "node": "If URL Configured",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If URL Configured": {
+      "main": [
+        [
+          {
+            "node": "HTTP Ping",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "HTTP Ping": {
+      "main": [
+        [
+          {
+            "node": "Ping Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ping Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ping Success": {
+      "main": [
+        []
+      ]
+    },
+    "Ping Failure": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "healthcheck-ping",
+  "tags": ["core", "healthcheck", "monitoring"]
+}

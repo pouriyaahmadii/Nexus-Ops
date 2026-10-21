@@ -1,0 +1,215 @@
+{
+  "name": "Chaos API Demo (Retry & DLQ)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chaos",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "fields": {
+          "string": [
+            {
+              "name": "fail_count",
+              "value": "={{ parseInt($json.body?.fail_count || $json.query?.fail_count || '3', 10) }}"
+            },
+            {
+              "name": "delay_ms",
+              "value": "={{ parseInt($json.body?.delay_ms || $json.query?.delay_ms || '500', 10) }}"
+            }
+          ]
+        }
+      },
+      "id": "set-params",
+      "name": "Set Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const failCount = $json.fail_count;\nconst delayMs = $json.delay_ms;\n\n// Store fail count in static data to persist across executions\nif (typeof $getWorkflowStaticData('global').failCount === 'undefined') {\n  $getWorkflowStaticData('global').failCount = 0;\n}\n\n$getWorkflowStaticData('global').failCount++;\nconst currentAttempt = $getWorkflowStaticData('global').failCount;\n\nif (currentAttempt <= failCount) {\n  return [{\n    json: {\n      should_fail: true,\n      attempt: currentAttempt,\n      max_failures: failCount,\n      message: `Simulated failure ${currentAttempt}/${failCount}`\n    }\n  }];\n} else {\n  // Reset for next run\n  $getWorkflowStaticData('global').failCount = 0;\n  return [{\n    json: {\n      should_fail: false,\n      attempt: currentAttempt,\n      message: `Success after ${failCount} failures`\n    }\n  }];\n}"
+      },
+      "id": "chaos-logic",
+      "name": "Chaos Logic",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.should_fail }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-fail",
+      "name": "If Should Fail",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.delay_ms || 500 }}",
+        "unit": "milliseconds"
+      },
+      "id": "delay",
+      "name": "Delay",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { error: 'Simulated failure', attempt: $json.attempt, max_failures: $json.max_failures } }];"
+      },
+      "id": "throw-error",
+      "name": "Throw Error",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { success: true, message: 'Chaos demo succeeded', attempt: $json.attempt } }];"
+      },
+      "id": "success",
+      "name": "Success",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [900, 500]
+    },
+    {
+      "parameters": {
+        "options": {
+          "respondWith": "json",
+          "respondJson": "={{ { success: true, data: $json } }}"
+        }
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 500]
+    },
+    {
+      "parameters": {
+        "options": {
+          "respondWith": "json",
+          "respondJson": "={{ { success: false, error: 'Simulated failure', data: $json } }}"
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Parameters": {
+      "main": [
+        [
+          {
+            "node": "Chaos Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chaos Logic": {
+      "main": [
+        [
+          {
+            "node": "If Should Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Should Fail": {
+      "main": [
+        [
+          {
+            "node": "Delay",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delay": {
+      "main": [
+        [
+          {
+            "node": "Throw Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Throw Error": {
+      "main": [
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Success": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "chaos-api-demo",
+  "tags": ["demo", "chaos", "testing"]
+}

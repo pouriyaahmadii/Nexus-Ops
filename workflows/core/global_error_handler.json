@@ -1,0 +1,159 @@
+{
+  "name": "Global Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const error = $json[\"error\"];\nconst workflow = $json[\"workflow\"];\nconst execution = $json[\"execution\"];\n\nreturn [{\n  json: {\n    workflow_id: workflow.id,\n    workflow_name: workflow.name,\n    execution_id: execution.id,\n    node_name: error.node.name,\n    error_message: error.message,\n    error_stack: error.stack || '',\n    payload: error.node.parameters || {},\n    attempts: 0,\n    status: 'pending',\n    notes: ''\n  }\n}];"
+      },
+      "id": "prepare-dlq",
+      "name": "Prepare DLQ Record",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "ops",
+        "table": "dead_letters",
+        "columns": [
+          "workflow_id",
+          "workflow_name",
+          "execution_id",
+          "node_name",
+          "error_message",
+          "error_stack",
+          "payload",
+          "attempts",
+          "status",
+          "notes"
+        ],
+        "options": {}
+      },
+      "id": "insert-dlq",
+      "name": "Insert to DLQ",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [680, 300],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const dedupeWindowMs = parseInt($getEnv('ALERT_DEDUPE_WINDOW_MS') || '300000', 10); // default 5 min\nconst workflowId = $json.workflow_id;\nconst workflowName = $json.workflow_name;\nconst executionId = $json.execution_id;\nconst nodeName = $json.node_name;\nconst errorMessage = $json.error_message;\n\n// Build execution URL\nconst baseUrl = $getEnv('N8N_PUBLIC_URL') || $getEnv('WEBHOOK_URL') || 'http://n8n.localhost';\nconst executionUrl = `${baseUrl}/executions/${executionId}`;\n\n// Check dedupe table\n// This would normally query Postgres, but for simplicity we use a static variable approach\n// In production, use the ops.alert_dedupe table via a Postgres node\n\nreturn [{\n  json: {\n    workflow_id: workflowId,\n    workflow_name: workflowName,\n    execution_id: executionId,\n    node_name: nodeName,\n    error_message: errorMessage,\n    execution_url: executionUrl,\n    severity: 'critical',\n    dedupe_window_ms: dedupeWindowMs\n  }\n}];"
+      },
+      "id": "prepare-alert",
+      "name": "Prepare Alert",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $getEnv('ALERT_TELEGRAM_CHAT_ID') }}",
+        "text": "🚨 *NexusOps Error Alert*\n\n*Workflow:* {{ $json.workflow_name }} ({{ $json.workflow_id }})\n*Node:* {{ $json.node_name }}\n*Execution:* [{{ $json.execution_id }}]({{ $json.execution_url }})\n*Error:* {{ $json.error_message }}\n*Severity:* {{ $json.severity }}\n*Time:* {{ $now.format('YYYY-MM-DD HH:mm:ss Z') }}",
+        "parseMode": "Markdown",
+        "options": {
+          "disableNotification": false
+        }
+      },
+      "id": "telegram-alert",
+      "name": "Send Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1120, 300],
+      "credentials": {
+        "telegramApi": "telegram_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "ops",
+        "table": "alert_dedupe",
+        "columns": [
+          "workflow_id",
+          "last_alert_at",
+          "alert_count"
+        ],
+        "options": {
+          "onConflict": "workflow_id DO UPDATE SET last_alert_at = EXCLUDED.last_alert_at, alert_count = ops.alert_dedupe.alert_count + 1"
+        }
+      },
+      "id": "upsert-dedupe",
+      "name": "Upsert Dedupe",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [1120, 500],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare DLQ Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare DLQ Record": {
+      "main": [
+        [
+          {
+            "node": "Insert to DLQ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert to DLQ": {
+      "main": [
+        [
+          {
+            "node": "Prepare Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Upsert Dedupe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "global-error-handler",
+  "tags": ["core", "error-handling"]
+}

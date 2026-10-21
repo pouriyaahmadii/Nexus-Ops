@@ -1,0 +1,567 @@
+{
+  "name": "DLQ Replay",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dlq/replay",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const authHeader = $json.headers?.authorization || $json.headers?.Authorization;\nconst expectedToken = $getEnv('DLQ_REPLAY_TOKEN');\n\nif (!expectedToken) {\n  return [{ json: { error: 'DLQ_REPLAY_TOKEN not configured', status: 500 } }];\n}\n\nif (!authHeader || !authHeader.startsWith('Bearer ')) {\n  return [{ json: { error: 'Missing or invalid Authorization header', status: 401 } }];\n}\n\nconst token = authHeader.slice(7);\nif (token !== expectedToken) {\n  return [{ json: { error: 'Invalid token', status: 403 } }];\n}\n\nconst dlqId = $json.body?.dlq_id;\nconst action = $json.body?.action || 'replay'; // 'replay' | 'list' | 'discard'\n\nreturn [{ json: { dlq_id: dlqId, action, authorized: true } }];"
+      },
+      "id": "auth-check",
+      "name": "Auth Check",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.authorized }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-authorized",
+      "name": "If Authorized",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { error: 'Unauthorized', status: 401 } }];"
+      },
+      "id": "unauthorized",
+      "name": "Unauthorized",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [900, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "operation": "equals",
+              "value2": "list"
+            }
+          ]
+        }
+      },
+      "id": "if-list",
+      "name": "If List",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "query": "SELECT id, created_at, workflow_id, workflow_name, execution_id, node_name, error_message, attempts, status FROM ops.dead_letters WHERE status = 'pending' ORDER BY created_at DESC LIMIT 50;",
+        "options": {}
+      },
+      "id": "list-dlq",
+      "name": "List Pending DLQ",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [1120, 200],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "operation": "equals",
+              "value2": "replay"
+            }
+          ]
+        }
+      },
+      "id": "if-replay",
+      "name": "If Replay",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !!$json.dlq_id }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-dlq-id",
+      "name": "If DLQ ID Provided",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { error: 'dlq_id required for replay', status: 400 } }];"
+      },
+      "id": "missing-dlq-id",
+      "name": "Missing DLQ ID",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "query": "SELECT * FROM ops.dead_letters WHERE id = $1 AND status = 'pending';",
+        "queryParameters": [
+          {
+            "parameter": "={{ $json.dlq_id }}"
+          }
+        ],
+        "options": {}
+      },
+      "id": "get-dlq-item",
+      "name": "Get DLQ Item",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [1560, 400],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.length > 0 }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-found",
+      "name": "If Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [1780, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { error: 'DLQ item not found or already replayed', status: 404 } }];"
+      },
+      "id": "not-found",
+      "name": "Not Found",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const item = $json[0];\n\n// Replay by calling the original workflow via webhook or n8n API\nconst baseUrl = $getEnv('N8N_PUBLIC_URL') || $getEnv('WEBHOOK_URL') || 'http://n8n.localhost';\nconst replayUrl = `${baseUrl}/webhook/${item.workflow_id}/replay`;\n\n// Or use n8n REST API to re-execute\nconst apiUrl = `${baseUrl}/api/v1/workflows/${item.workflow_id}/execute`;\n\nreturn [{\n  json: {\n    dlq_id: item.id,\n    workflow_id: item.workflow_id,\n    original_execution_id: item.execution_id,\n    payload: item.payload,\n    replay_url: replayUrl,\n    api_url: apiUrl\n  }\n}];"
+      },
+      "id": "prepare-replay",
+      "name": "Prepare Replay",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [2000, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.api_url }}",
+        "method": "POST",
+        "jsonParameters": true,
+        "options": {
+          "timeout": 60000
+        },
+        "headerParametersJson": "={{ JSON.stringify({ 'Content-Type': 'application/json' }) }}",
+        "bodyParametersJson": "={{ JSON.stringify({ workflowData: $json.payload }) }}"
+      },
+      "id": "execute-workflow",
+      "name": "Execute Workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2220, 400]
+    },
+    {
+      "parameters": {
+        "query": "UPDATE ops.dead_letters SET status = 'replayed', replayed_at = NOW(), attempts = attempts + 1 WHERE id = $1;",
+        "queryParameters": [
+          {
+            "parameter": "={{ $json.dlq_id }}"
+          }
+        ],
+        "options": {}
+      },
+      "id": "mark-replayed",
+      "name": "Mark Replayed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [2440, 400],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "operation": "equals",
+              "value2": "discard"
+            }
+          ]
+        }
+      },
+      "id": "if-discard",
+      "name": "If Discard",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [1340, 500]
+    },
+    {
+      "parameters": {
+        "query": "UPDATE ops.dead_letters SET status = 'discarded', notes = $2 WHERE id = $1;",
+        "queryParameters": [
+          {
+            "parameter": "={{ $json.dlq_id }}"
+          },
+          {
+            "parameter": "={{ $json.notes || 'Discarded via API' }}"
+          }
+        ],
+        "options": {}
+      },
+      "id": "mark-discarded",
+      "name": "Mark Discarded",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [1560, 500],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "respondWith": "json",
+          "respondJson": "={{ { success: true, data: $json, status: 200 } }}"
+        }
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2660, 400]
+    },
+    {
+      "parameters": {
+        "options": {
+          "respondWith": "json",
+          "respondJson": "={{ { success: true, data: $json, status: 200 } }}"
+        }
+      },
+      "id": "respond-list",
+      "name": "Respond List",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "options": {
+          "respondWith": "json",
+          "respondJson": "={{ { success: true, message: 'Discarded', status: 200 } }}"
+        }
+      },
+      "id": "respond-discard",
+      "name": "Respond Discard",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1780, 500]
+    },
+    {
+      "parameters": {
+        "options": {
+          "respondWith": "json",
+          "respondJson": "={{ { success: false, error: $json.error, status: $json.status || 500 } }}"
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 500]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Auth Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth Check": {
+      "main": [
+        [
+          {
+            "node": "If Authorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Authorized": {
+      "main": [
+        [
+          {
+            "node": "If List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unauthorized": {
+      "main": [
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If List": {
+      "main": [
+        [
+          {
+            "node": "List Pending DLQ",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Replay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Pending DLQ": {
+      "main": [
+        [
+          {
+            "node": "Respond List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Replay": {
+      "main": [
+        [
+          {
+            "node": "If DLQ ID Provided",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Discard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If DLQ ID Provided": {
+      "main": [
+        [
+          {
+            "node": "Get DLQ Item",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Missing DLQ ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Missing DLQ ID": {
+      "main": [
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get DLQ Item": {
+      "main": [
+        [
+          {
+            "node": "If Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Found": {
+      "main": [
+        [
+          {
+            "node": "Prepare Replay",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Not Found": {
+      "main": [
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Replay": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow": {
+      "main": [
+        [
+          {
+            "node": "Mark Replayed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Replayed": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Discard": {
+      "main": [
+        [
+          {
+            "node": "Mark Discarded",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Mark Discarded": {
+      "main": [
+        [
+          {
+            "node": "Respond Discard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Error": {
+      "main": [
+        []
+      ]
+    },
+    "Respond List": {
+      "main": [
+        []
+      ]
+    },
+    "Respond Success": {
+      "main": [
+        []
+      ]
+    },
+    "Respond Discard": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "dlq-replay",
+  "tags": ["core", "dlq", "replay"]
+}

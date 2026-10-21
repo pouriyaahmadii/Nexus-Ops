@@ -411,6 +411,55 @@ services:
       retries: 3
       start_period: 10s
 
+  # --------------------------------------------------------------------------
+  # n8n Bootstrap (one-shot): imports workflows, creates credentials, sets global error handler
+  # --------------------------------------------------------------------------
+  n8n-bootstrap:
+    <<: *common_prod
+    image: "n8nio/n8n:stable"
+    container_name: nexusops_n8n_bootstrap
+    user: "1000:1000"
+    environment:
+      WORKFLOWS_DIR: /workflows
+      N8N_HOST: n8n-main
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_USER: ${N8N_BOOTSTRAP_USER:-admin}
+      N8N_PASSWORD: ${N8N_BOOTSTRAP_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-nexusops}
+      OPS_WRITER_PASSWORD: ${OPS_WRITER_PASSWORD}
+      TELEGRAM_BOT_TOKEN: ${ALERT_TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${ALERT_TELEGRAM_CHAT_ID}
+      DLQ_REPLAY_TOKEN: ${DLQ_REPLAY_TOKEN}
+    volumes:
+      - "./workflows:/workflows:ro"
+      - "./infra/n8n/bootstrap.sh:/scripts/bootstrap.sh:ro"
+    networks:
+      - app
+      - data
+    depends_on:
+      n8n-main:
+        condition: service_healthy
+      n8n-webhook:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/scripts/bootstrap.sh"]
+    deploy:
+      restart_policy:
+        condition: none
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 30s
+      timeout: 5s
+      retries: 1
+
 volumes:
   letsencrypt:
   backups:

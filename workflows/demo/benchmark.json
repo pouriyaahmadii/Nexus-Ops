@@ -1,0 +1,103 @@
+{
+  "name": "AutoForge Benchmark (parallel executions)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bench",
+        "responseMode": "lastNode"
+      },
+      "id": "webhook-start",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "task": [
+          {
+            "description": "Simulated work item 1",
+            "amount": 200,
+            "unit": "ms"
+          }
+        ],
+        "options": {}
+      },
+      "id": "wait-a",
+      "name": "Work A",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [460, 200]
+    },
+    {
+      "parameters": {
+        "task": [
+          {
+            "description": "Simulated work item 2",
+            "amount": 200,
+            "unit": "ms"
+          }
+        ],
+        "options": {}
+      },
+      "id": "wait-b",
+      "name": "Work B",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {},
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Work A",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Work B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Work A": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Work B": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "id": "bench-01",
+  "tags": []
+}

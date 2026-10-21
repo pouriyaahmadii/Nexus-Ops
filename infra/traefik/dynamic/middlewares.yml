@@ -1,0 +1,42 @@
+# Traefik dynamic configuration - middlewares
+# Loaded by the file provider (see traefik.yml).
+# Routers for individual services are declared via labels on those services.
+
+http:
+  middlewares:
+    # ---- Security headers (applied to all public routes) ----
+    sec-headers:
+      headers:
+        customResponseHeaders:
+          X-Content-Type-Options: "nosniff"
+          X-Frame-Options: "DENY"
+          Referrer-Policy: "no-referrer"
+          Permissions-Policy: "geolocation=(), microphone=(), camera=()"
+          Strict-Transport-Security: "max-age=31536000; includeSubDomains; preload"
+
+    # ---- HTTP -> HTTPS redirect (base mode keeps plain HTTP) ----
+    redirect-to-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+    # ---- Dashboard basic auth (prod: set via compose.prod.yaml label) ----
+    dashboard-auth:
+      basicAuth:
+        usersFile: /etc/traefik/dynamic/users.htpasswd
+
+    # ---- Rate limiting on webhook routes ----
+    webhook-rate-limit:
+      rateLimit:
+        average: 100
+        burst: 200
+
+    # ---- TLS hardening ----
+    tls-min-version:
+      tls:
+        minVersion: VersionTLS12
+        cipherSuites:
+          - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+          - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+          - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+          - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384

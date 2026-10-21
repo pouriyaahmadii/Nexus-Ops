@@ -1,0 +1,40 @@
+# Traefik static configuration (file provider loads this at startup)
+# See: https://doc.traefik.io/traefik/providers/file/
+api:
+  dashboard: true
+  # Base mode: insecure API on :8080 (not published). Prod overrides via CLI --api.insecure=false.
+  insecure: true
+
+entryPoints:
+  web:
+    address: :80
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: :443
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+  file:
+    filename: /etc/traefik/dynamic/middlewares.yml
+    watch: true
+
+certificatesResolvers:
+  le:
+    acme:
+      email: ${LE_EMAIL}
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+
+accessLog:
+  format: json
+  fields:
+    headers:
+      defaultMode: keep

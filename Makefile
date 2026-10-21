@@ -7,7 +7,7 @@ SHELL := /bin/bash
 
 COMPOSE_PROJECT_NAME ?= nexusops
 
-.PHONY: help up down logs doctor backup restore-test demo lint scale workers
+.PHONY: help up down logs doctor backup backup-list restore restore-test demo lint scale workers
 COMPOSE_FILE ?= compose.yaml
 
 help: ## Print this formatted list of targets with descriptions
@@ -29,11 +29,37 @@ logs: ## Follow logs from running platform services
 doctor: ## Run diagnostic checks on system requirements and ports (Phase 10)
 	@echo "[doctor] Placeholder: Host diagnostics and port checks will be introduced in Phase 10."
 
-backup: ## Trigger encrypted database and config backup (Phase 5)
-	@echo "[backup] Placeholder: Backup automation will be introduced in Phase 5."
+backup: ## Trigger encrypted backup (Postgres, Qdrant, n8n data, Traefik acme)
+	@docker compose -p $(COMPOSE_PROJECT_NAME) -f $(COMPOSE_FILE) run --rm backup /scripts/backup.sh
 
-restore-test: ## Run backup restore drill in an isolated environment (Phase 5)
-	@echo "[restore-test] Placeholder: Backup drill test will be introduced in Phase 5."
+backup-list: ## List available backups
+	@docker run --rm -v nexusops_backups:/backup/data:ro alpine:3.21 \
+		sh -c 'find /backup/data -maxdepth 1 -type d -name "nexusops-*" | sort -r | head -20'
+
+restore: ## Restore from backup (usage: make restore SNAPSHOT=nexusops-...)
+	@if [ -z "$(SNAPSHOT)" ]; then echo "Usage: make restore SNAPSHOT=nexusops-..."; exit 1; fi
+	@docker compose -p $(COMPOSE_PROJECT_NAME) -f $(COMPOSE_FILE) run --rm backup /scripts/restore.sh --yes $(SNAPSHOT)
+
+restore-test: ## Run automated restore drill in isolated environment
+	@docker run --rm \
+	    --name $(COMPOSE_PROJECT_NAME)-restore-test \
+	    -v /var/run/docker.sock:/var/run/docker.sock:ro \
+	    -v nexusops_backups:/backup/data:ro \
+	    -v nexusops_n8n_data:/n8n/data:ro \
+	    -v nexusops_letsencrypt:/traefik:ro \
+	    -e BACKUP_DIR=/backup/data \
+	    -e BACKUP_AGE_RECIPIENT="$(BACKUP_AGE_RECIPIENT)" \
+	    -e POSTGRES_PASSWORD="$(POSTGRES_PASSWORD)" \
+	    -e REDIS_PASSWORD="$(REDIS_PASSWORD)" \
+	    -e QDRANT_API_KEY="$(QDRANT_API_KEY)" \
+	    -e N8N_ENCRYPTION_KEY="$(N8N_ENCRYPTION_KEY)" \
+	    -e BACKUP_S3_ENABLED="$(BACKUP_S3_ENABLED)" \
+	    -e BACKUP_S3_ENDPOINT="$(BACKUP_S3_ENDPOINT)" \
+	    -e BACKUP_S3_BUCKET="$(BACKUP_S3_BUCKET)" \
+	    -e BACKUP_S3_PREFIX="$(BACKUP_S3_PREFIX)" \
+	    -e BACKUP_S3_ACCESS_KEY="$(BACKUP_S3_ACCESS_KEY)" \
+	    -e BACKUP_S3_SECRET_KEY="$(BACKUP_S3_SECRET_KEY)" \
+	    nexusops-backup:latest /scripts/restore-test.sh
 
 demo: ## Run end-to-end showcase workflow (Phase 9)
 	@echo "[demo] Placeholder: Showcase workflow trigger will be introduced in Phase 9."

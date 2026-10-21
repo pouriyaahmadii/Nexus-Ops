@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# crontab for backup service
+# Schedule controlled by BACKUP_CRON env var (default: daily at 03:00)
+
+# Example: 0 3 * * * /scripts/backup.sh >> /backup/logs/backup.log 2>&1
+# The actual schedule is rendered at container startup from BACKUP_CRON

@@ -1,0 +1,195 @@
+{
+  "name": "LLM Cost Report",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "cron",
+              "cronExpression": "0 9 * * 1"  // Every Monday 09:00 UTC
+            }
+          ]
+        }
+      },
+      "id": "schedule",
+      "name": "Schedule (weekly Mon 09:00)",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "query": "SELECT * FROM ops.v_llm_cost_daily WHERE cost_date >= CURRENT_DATE - INTERVAL '7 days' ORDER BY cost_date DESC, total_cost_usd DESC LIMIT 20;",
+        "options": {}
+      },
+      "id": "get-weekly-costs",
+      "name": "Get Weekly Costs",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [460, 200],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "query": "SELECT * FROM ops.v_llm_cost_by_workflow ORDER BY total_cost_usd DESC LIMIT 10;",
+        "options": {}
+      },
+      "id": "get-top-workflows",
+      "name": "Get Top Workflows",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [460, 400],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "query": "SELECT * FROM ops.v_llm_cost_month_to_date ORDER BY total_cost_usd DESC;",
+        "options": {}
+      },
+      "id": "get-mtd",
+      "name": "Get MTD",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [460, 600],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "query": "SELECT DATE_TRUNC('week', created_at)::DATE AS week_start, SUM(total_cost_usd) AS week_cost FROM ops.llm_usage WHERE status='success' AND created_at >= CURRENT_DATE - INTERVAL '8 weeks' GROUP BY DATE_TRUNC('week', created_at) ORDER BY week_start DESC LIMIT 2;",
+        "options": {}
+      },
+      "id": "get-wow-comparison",
+      "name": "Get WoW Comparison",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [460, 800],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const weekly = $json[0] || [];\nconst topWorkflows = $json[1] || [];\nconst mtd = $json[2] || [];\nconst wow = $json[3] || [];\n\nlet thisWeek = wow[0]?.week_cost || 0;\nlet lastWeek = wow[1]?.week_cost || 0;\nlet wowPct = lastWeek > 0 ? ((thisWeek - lastWeek) / lastWeek) * 100 : 0;\n\nlet totalWeekly = weekly.reduce((sum, r) => sum + parseFloat(r.total_cost_usd || 0), 0);\nlet totalMtd = mtd.reduce((sum, r) => sum + parseFloat(r.total_cost_usd || 0), 0);\n\nlet weeklyLines = weekly.slice(0, 7).map(r => \n  `  ${r.cost_date}: $${parseFloat(r.total_cost_usd).toFixed(4)} (${r.provider}/${r.model}, ${r.call_count} calls)`\n).join('\\n') || '  No data';\n\nlet topWfLines = topWorkflows.slice(0, 5).map(r => \n  `  ${r.workflow_name}: $${parseFloat(r.total_cost_usd).toFixed(4)} (${r.call_count} calls)`\n).join('\\n') || '  No data';\n\nlet mtdLines = mtd.map(r => \n  `  ${r.provider}/${r.model}: $${parseFloat(r.total_cost_usd).toFixed(4)} (${r.call_count} calls)`\n).join('\\n') || '  No data';\n\nlet wowArrow = wowPct >= 0 ? '📈' : '📉';\n\nreturn [{\n  json: {\n    weekly_total: totalWeekly,\n    mtd_total: totalMtd,\n    this_week: thisWeek,\n    last_week: lastWeek,\n    wow_pct: wowPct,\n    report_text: `📊 *Weekly LLM Cost Report* (${$now.format('YYYY-MM-DD')})\n\n*Week Total:* $${totalWeekly.toFixed(4)}\n*Month-to-Date:* $${totalMtd.toFixed(4)}\n*WoW:* ${wowArrow} ${wowPct >= 0 ? '+' : ''}${wowPct.toFixed(1)}% (This: $${thisWeek.toFixed(4)}, Last: $${lastWeek.toFixed(4)})\n\n*Daily Breakdown (Last 7 Days):*\\n${weeklyLines}\n\n*Top Workflows (All Time):*\\n${topWfLines}\n\n*MTD by Model:*\\n${mtdLines}`\n  }\n}];"
+      },
+      "id": "format-report",
+      "name": "Format Report",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $getEnv('ALERT_TELEGRAM_CHAT_ID') }}",
+        "text": "={{ $json.report_text }}",
+        "parseMode": "Markdown",
+        "options": {
+          "disableNotification": true
+        }
+      },
+      "id": "telegram-report",
+      "name": "Send Telegram Report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [900, 300],
+      "credentials": {
+        "telegramApi": "telegram_credentials"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule (weekly Mon 09:00)": {
+      "main": [
+        [
+          {
+            "node": "Get Weekly Costs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Top Workflows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get MTD",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get WoW Comparison",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Weekly Costs": {
+      "main": [
+        [
+          {
+            "node": "Format Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Top Workflows": {
+      "main": [
+        [
+          {
+            "node": "Format Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get MTD": {
+      "main": [
+        [
+          {
+            "node": "Format Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get WoW Comparison": {
+      "main": [
+        [
+          {
+            "node": "Format Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Report": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  ],
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "llm_cost_report",
+  "tags": ["ops", "llm", "reporting", "cost-tracking"]
+}

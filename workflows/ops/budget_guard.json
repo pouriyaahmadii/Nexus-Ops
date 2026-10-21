@@ -1,0 +1,374 @@
+{
+  "name": "Budget Guard",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 1,
+              "unit": "hours"
+            }
+          ]
+        }
+      },
+      "id": "schedule",
+      "name": "Schedule (hourly)",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const budgetUsd = parseFloat($getEnv('LLM_MONTHLY_BUDGET_USD') || '0');\nconst enforce = $getEnv('BUDGET_ENFORCE') === 'true';\nconst warningThreshold = parseFloat($getEnv('BUDGET_WARNING_THRESHOLD') || '0.8'); // 80%\nconst criticalThreshold = parseFloat($getEnv('BUDGET_CRITICAL_THRESHOLD') || '1.0'); // 100%\n\nif (budgetUsd <= 0) {\n  return [{ json: { skipped: true, reason: 'LLM_MONTHLY_BUDGET_USD not set or zero' } }];\n}\n\nreturn [{\n  json: {\n    budget_usd: budgetUsd,\n    enforce: enforce,\n    warning_threshold: warningThreshold,\n    critical_threshold: criticalThreshold\n  }\n}];"
+      },
+      "id": "get-config",
+      "name": "Get Config",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !$json.skipped }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-configured",
+      "name": "If Configured",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "query": "SELECT COALESCE(SUM(total_cost_usd), 0) AS mtd_cost FROM ops.v_llm_cost_month_to_date;",
+        "options": {}
+      },
+      "id": "get-mtd-cost",
+      "name": "Get MTD Cost",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [900, 200],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const mtdCost = parseFloat($json[0]?.mtd_cost || '0');\nconst budget = $json.budget_usd;\nconst pct = budget > 0 ? mtdCost / budget : 0;\nconst isWarning = pct >= $json.warning_threshold;\nconst isCritical = pct >= $json.critical_threshold;\n\nreturn [{\n  json: {\n    mtd_cost_usd: mtdCost,\n    budget_usd: budget,\n    pct_used: pct,\n    is_warning: isWarning,\n    is_critical: isCritical,\n    enforce: $json.enforce,\n    threshold_warning: $json.warning_threshold,\n    threshold_critical: $json.criticalThreshold\n  }\n}];"
+      },
+      "id": "calc-pct",
+      "name": "Calculate Percentage",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.is_warning || $json.is_critical }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-alert-needed",
+      "name": "If Alert Needed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $getEnv('ALERT_TELEGRAM_CHAT_ID') }}",
+        "text": "⚠️ *LLM Budget Alert*\n\n*Status:* {{ $json.is_critical ? '🔴 CRITICAL' : '🟡 WARNING' }}\n*Month-to-date:* ${{ $json.mtd_cost_usd.toFixed(2) }}\n*Budget:* ${{ $json.budget_usd.toFixed(2) }}\n*Used:* {{ ($json.pct_used * 100).toFixed(1) }}%\n*Warning at:* {{ ($json.threshold_warning * 100).toFixed(0) }}%\n*Critical at:* {{ ($json.threshold_critical * 100).toFixed(0) }}%\n*Enforce:* {{ $json.enforce ? 'YES' : 'NO' }}\n\n{{ $json.is_critical && $json.enforce ? '🛑 Workflows tagged \"llm-guarded\" will be deactivated.' : '' }}\n*Time:* {{ $now.format('YYYY-MM-DD HH:mm:ss Z') }}",
+        "parseMode": "Markdown",
+        "options": {
+          "disableNotification": "{{ $json.is_critical }}"
+        }
+      },
+      "id": "telegram-alert",
+      "name": "Send Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1560, 100],
+      "credentials": {
+        "telegramApi": "telegram_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.is_critical && $json.enforce }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-enforce",
+      "name": "If Enforce",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ ($getEnv('N8N_PUBLIC_URL') || $getEnv('WEBHOOK_URL') || 'http://n8n.localhost').replace(/\\/$/, '') }}/api/v1/workflows",
+        "method": "GET",
+        "options": {
+          "timeout": 10000
+        },
+        "headerParametersJson": "={{ JSON.stringify({ 'X-N8N-API-KEY': $getEnv('N8N_API_KEY') }) }}"
+      },
+      "id": "list-workflows",
+      "name": "List Workflows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const workflows = $json.data || $json;\nconst guarded = workflows.filter(w => \n  w.tags && w.tags.some(t => t.name === 'llm-guarded') && w.active === true\n);\nreturn guarded.map(w => ({\n  json: { workflow_id: w.id, workflow_name: w.name }\n}));"
+      },
+      "id": "filter-guarded",
+      "name": "Filter Guarded",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [2000, 200]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "split-guarded",
+      "name": "Split Guarded",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1.1,
+      "position": [2220, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{ ($getEnv('N8N_PUBLIC_URL') || $getEnv('WEBHOOK_URL') || 'http://n8n.localhost').replace(/\\/$/, '') }}/api/v1/workflows/{{ $json.workflow_id }}/deactivate",
+        "method": "POST",
+        "options": {
+          "timeout": 10000
+        },
+        "headerParametersJson": "={{ JSON.stringify({ 'X-N8N-API-KEY': $getEnv('N8N_API_KEY') }) }}"
+      },
+      "id": "deactivate-workflow",
+      "name": "Deactivate Workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2440, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { deactivated: $json.workflow_id, workflow_name: $json.workflow_name, timestamp: new Date().toISOString() } }];"
+      },
+      "id": "record-deactivation",
+      "name": "Record Deactivation",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [2660, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const deactivated = $json.deactivated || [];\nreturn [{ json: { success: true, mtd_cost_usd: $json.mtd_cost_usd, budget_usd: $json.budget_usd, pct_used: $json.pct_used, deactivated_count: deactivated.length, deactivated: deactivated, alert_sent: $json.is_warning || $json.is_critical } }];"
+      },
+      "id": "result",
+      "name": "Result",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [2880, 200]
+    }
+  ],
+  "connections": {
+    "Schedule (hourly)": {
+      "main": [
+        [
+          {
+            "node": "Get Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Config": {
+      "main": [
+        [
+          {
+            "node": "If Configured",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Configured": {
+      "main": [
+        [
+          {
+            "node": "Get MTD Cost",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Get MTD Cost": {
+      "main": [
+        [
+          {
+            "node": "Calculate Percentage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Percentage": {
+      "main": [
+        [
+          {
+            "node": "If Alert Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Alert Needed": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram Alert": {
+      "main": [
+        [
+          {
+            "node": "If Enforce",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Enforce": {
+      "main": [
+        [
+          {
+            "node": "List Workflows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Workflows": {
+      "main": [
+        [
+          {
+            "node": "Filter Guarded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Guarded": {
+      "main": [
+        [
+          {
+            "node": "Split Guarded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Guarded": {
+      "main": [
+        [
+          {
+            "node": "Deactivate Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deactivate Workflow": {
+      "main": [
+        [
+          {
+            "node": "Record Deactivation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Deactivation": {
+      "main": [
+        [
+          {
+            "node": "Split Guarded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Alert Needed": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "budget_guard",
+  "tags": ["ops", "llm", "budget", "guard"]
+}

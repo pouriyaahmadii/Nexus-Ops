@@ -24,7 +24,10 @@
       "name": "Prepare Input",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -43,7 +46,10 @@
       "name": "Get Policy",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [460, 300],
+      "position": [
+        460,
+        300
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -56,7 +62,10 @@
       "name": "Evaluate Policy",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     }
   ],
   "connections": {
@@ -87,6 +96,10 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "id": "needs_approval",
-  "tags": ["approvals", "policy", "utility"]
+  "id": "e5b3e9ef-4b6d-43c6-acbc-e71641b68276",
+  "tags": [
+    "approvals",
+    "policy",
+    "utility"
+  ]
 }

@@ -7,7 +7,7 @@
           "item": [
             {
               "mode": "cron",
-              "cronExpression": "0 9 * * 1"  // Every Monday 09:00 UTC
+              "cronExpression": "0 9 * * 1"
             }
           ]
         }
@@ -16,7 +16,10 @@
       "name": "Schedule (weekly Mon 09:00)",
       "type": "n8n-nodes-base.cron",
       "typeVersion": 1.1,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -27,7 +30,10 @@
       "name": "Get Weekly Costs",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [460, 200],
+      "position": [
+        460,
+        200
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -41,7 +47,10 @@
       "name": "Get Top Workflows",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [460, 400],
+      "position": [
+        460,
+        400
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -55,7 +64,10 @@
       "name": "Get MTD",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [460, 600],
+      "position": [
+        460,
+        600
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -69,20 +81,26 @@
       "name": "Get WoW Comparison",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [460, 800],
+      "position": [
+        460,
+        800
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
     },
     {
       "parameters": {
-        "functionCode": "const weekly = $json[0] || [];\nconst topWorkflows = $json[1] || [];\nconst mtd = $json[2] || [];\nconst wow = $json[3] || [];\n\nlet thisWeek = wow[0]?.week_cost || 0;\nlet lastWeek = wow[1]?.week_cost || 0;\nlet wowPct = lastWeek > 0 ? ((thisWeek - lastWeek) / lastWeek) * 100 : 0;\n\nlet totalWeekly = weekly.reduce((sum, r) => sum + parseFloat(r.total_cost_usd || 0), 0);\nlet totalMtd = mtd.reduce((sum, r) => sum + parseFloat(r.total_cost_usd || 0), 0);\n\nlet weeklyLines = weekly.slice(0, 7).map(r => \n  `  ${r.cost_date}: $${parseFloat(r.total_cost_usd).toFixed(4)} (${r.provider}/${r.model}, ${r.call_count} calls)`\n).join('\\n') || '  No data';\n\nlet topWfLines = topWorkflows.slice(0, 5).map(r => \n  `  ${r.workflow_name}: $${parseFloat(r.total_cost_usd).toFixed(4)} (${r.call_count} calls)`\n).join('\\n') || '  No data';\n\nlet mtdLines = mtd.map(r => \n  `  ${r.provider}/${r.model}: $${parseFloat(r.total_cost_usd).toFixed(4)} (${r.call_count} calls)`\n).join('\\n') || '  No data';\n\nlet wowArrow = wowPct >= 0 ? '📈' : '📉';\n\nreturn [{\n  json: {\n    weekly_total: totalWeekly,\n    mtd_total: totalMtd,\n    this_week: thisWeek,\n    last_week: lastWeek,\n    wow_pct: wowPct,\n    report_text: `📊 *Weekly LLM Cost Report* (${$now.format('YYYY-MM-DD')})\n\n*Week Total:* $${totalWeekly.toFixed(4)}\n*Month-to-Date:* $${totalMtd.toFixed(4)}\n*WoW:* ${wowArrow} ${wowPct >= 0 ? '+' : ''}${wowPct.toFixed(1)}% (This: $${thisWeek.toFixed(4)}, Last: $${lastWeek.toFixed(4)})\n\n*Daily Breakdown (Last 7 Days):*\\n${weeklyLines}\n\n*Top Workflows (All Time):*\\n${topWfLines}\n\n*MTD by Model:*\\n${mtdLines}`\n  }\n}];"
+        "functionCode": "const weekly = $json[0] || [];\nconst topWorkflows = $json[1] || [];\nconst mtd = $json[2] || [];\nconst wow = $json[3] || [];\n\nlet thisWeek = wow[0]?.week_cost || 0;\nlet lastWeek = wow[1]?.week_cost || 0;\nlet wowPct = lastWeek > 0 ? ((thisWeek - lastWeek) / lastWeek) * 100 : 0;\n\nlet totalWeekly = weekly.reduce((sum, r) => sum + parseFloat(r.total_cost_usd || 0), 0);\nlet totalMtd = mtd.reduce((sum, r) => sum + parseFloat(r.total_cost_usd || 0), 0);\n\nlet weeklyLines = weekly.slice(0, 7).map(r => \n  `  ${r.cost_date}: $${parseFloat(r.total_cost_usd).toFixed(4)} (${r.provider}/${r.model}, ${r.call_count} calls)`\n).join('\\n') || '  No data';\n\nlet topWfLines = topWorkflows.slice(0, 5).map(r => \n  `  ${r.workflow_name}: $${parseFloat(r.total_cost_usd).toFixed(4)} (${r.call_count} calls)`\n).join('\\n') || '  No data';\n\nlet mtdLines = mtd.map(r => \n  `  ${r.provider}/${r.model}: $${parseFloat(r.total_cost_usd).toFixed(4)} (${r.call_count} calls)`\n).join('\\n') || '  No data';\n\nlet wowArrow = wowPct >= 0 ? '\ud83d\udcc8' : '\ud83d\udcc9';\n\nreturn [{\n  json: {\n    weekly_total: totalWeekly,\n    mtd_total: totalMtd,\n    this_week: thisWeek,\n    last_week: lastWeek,\n    wow_pct: wowPct,\n    report_text: `\ud83d\udcca *Weekly LLM Cost Report* (${$now.format('YYYY-MM-DD')})\n\n*Week Total:* $${totalWeekly.toFixed(4)}\n*Month-to-Date:* $${totalMtd.toFixed(4)}\n*WoW:* ${wowArrow} ${wowPct >= 0 ? '+' : ''}${wowPct.toFixed(1)}% (This: $${thisWeek.toFixed(4)}, Last: $${lastWeek.toFixed(4)})\n\n*Daily Breakdown (Last 7 Days):*\\n${weeklyLines}\n\n*Top Workflows (All Time):*\\n${topWfLines}\n\n*MTD by Model:*\\n${mtdLines}`\n  }\n}];"
       },
       "id": "format-report",
       "name": "Format Report",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [680, 400]
+      "position": [
+        680,
+        400
+      ]
     },
     {
       "parameters": {
@@ -97,7 +115,10 @@
       "name": "Send Telegram Report",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.1,
-      "position": [900, 300],
+      "position": [
+        900,
+        300
+      ],
       "credentials": {
         "telegramApi": "telegram_credentials"
       }
@@ -185,11 +206,16 @@
         ]
       ]
     }
-  ],
+  },
   "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "id": "llm_cost_report",
-  "tags": ["ops", "llm", "reporting", "cost-tracking"]
+  "id": "363f99b5-d274-4e45-9280-a0111a6374a8",
+  "tags": [
+    "ops",
+    "llm",
+    "reporting",
+    "cost-tracking"
+  ]
 }

@@ -40,7 +40,10 @@
       "name": "Validate Input",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -50,7 +53,10 @@
       "name": "Generate Attempts",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -60,7 +66,10 @@
       "name": "Split Attempts",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 1.1,
-      "position": [680, 300],
+      "position": [
+        680,
+        300
+      ],
       "executeOnce": true
     },
     {
@@ -79,7 +88,10 @@
       "name": "HTTP Request",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [900, 200]
+      "position": [
+        900,
+        200
+      ]
     },
     {
       "parameters": {
@@ -89,7 +101,10 @@
       "name": "Check Retryable",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [1120, 200]
+      "position": [
+        1120,
+        200
+      ]
     },
     {
       "parameters": {
@@ -106,7 +121,10 @@
       "name": "If Retryable",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1.1,
-      "position": [1340, 200]
+      "position": [
+        1340,
+        200
+      ]
     },
     {
       "parameters": {
@@ -116,7 +134,10 @@
       "name": "Calculate Delay",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [1560, 100]
+      "position": [
+        1560,
+        100
+      ]
     },
     {
       "parameters": {
@@ -127,7 +148,10 @@
       "name": "Wait",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [1780, 100]
+      "position": [
+        1780,
+        100
+      ]
     },
     {
       "parameters": {
@@ -137,7 +161,10 @@
       "name": "Success",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [1120, 400]
+      "position": [
+        1120,
+        400
+      ]
     },
     {
       "parameters": {
@@ -147,7 +174,10 @@
       "name": "Prepare Failure",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [1340, 400]
+      "position": [
+        1340,
+        400
+      ]
     },
     {
       "parameters": {
@@ -172,7 +202,10 @@
       "name": "Insert DLQ on Exhaustion",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [1560, 400],
+      "position": [
+        1560,
+        400
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -185,7 +218,10 @@
       "name": "Failure Result",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [1780, 400]
+      "position": [
+        1780,
+        400
+      ]
     }
   ],
   "connections": {
@@ -248,12 +284,14 @@
       "main": [
         [
           {
-            "node": "Calculate Delay",
+            "node": "Prepare Failure",
             "type": "main",
             "index": 0
-          },
+          }
+        ],
+        [
           {
-            "node": "Success",
+            "node": "Prepare Failure",
             "type": "main",
             "index": 0
           }
@@ -285,24 +323,6 @@
     "Success": {
       "main": [
         []
-      ]
-    },
-    "If Retryable": {
-      "main": [
-        [
-          {
-            "node": "Prepare Failure",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Prepare Failure",
-            "type": "main",
-            "index": 0
-          }
-        ]
       ]
     },
     "Prepare Failure": {
@@ -337,6 +357,10 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "id": "retry-with-backoff",
-  "tags": ["core", "retry", "utility"]
+  "id": "0fe65b85-f99d-4e0f-828d-f4015ec1face",
+  "tags": [
+    "core",
+    "retry",
+    "utility"
+  ]
 }

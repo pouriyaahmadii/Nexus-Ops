@@ -56,17 +56,23 @@
       "name": "Prepare Input",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
-        "functionCode": "const crypto = require('crypto');\n\nconst approvalId = crypto.randomUUID();\nconst callbackToken = crypto.randomBytes(32).toString('hex');\nconst timeoutMinutes = parseInt($json.timeout_minutes, 10);\nconst now = new Date();\nconst expiresAt = new Date(now.getTime() + timeoutMinutes * 60 * 1000);\nconst callbackExpiresAt = new Date(now.getTime() + (timeoutMinutes + 60) * 60 * 1000); // extra buffer for callback\n\n// Build callback URL (webhook that Wait node will listen on)\nconst baseUrl = $getEnv('N8N_PUBLIC_URL') || $getEnv('WEBHOOK_URL') || 'http://n8n.localhost';\nconst callbackUrl = `${baseUrl}/webhook/approval/callback/${approvalId}/${callbackToken}`;\n\n// Build Telegram message with inline keyboard\nconst message = `🔔 *Approval Request*\n\n*Action:* ${$json.action_type}\n*Risk:* ${$json.risk_level.toUpperCase()}\n*Summary:* ${$json.summary}\n*Requested by:* ${$json.requested_by}\n*Workflow:* ${$json.workflow_name} (${$json.workflow_id})\n*Execution:* ${$json.execution_id}\n*Expires:* ${expiresAt.toISOString()}\n\n*Details:*\n\`\`\`json\n${JSON.stringify(JSON.parse($json.details), null, 2).slice(0, 500)}\n\`\`\``;\n\nreturn [{\n  json: {\n    approval_id: approvalId,\n    callback_token: callbackToken,\n    callback_url: callbackUrl,\n    expires_at: expiresAt.toISOString(),\n    callback_expires_at: callbackExpiresAt.toISOString(),\n    message: message,\n    approver_primary: $json.approver_primary,\n    approver_secondary: $json.approver_secondary,\n    action_type: $json.action_type,\n    summary: $json.summary,\n    details: $json.details,\n    risk_level: $json.risk_level,\n    requested_by: $json.requested_by,\n    workflow_id: $json.workflow_id,\n    workflow_name: $json.workflow_name,\n    execution_id: $json.execution_id,\n    timeout_minutes: timeoutMinutes\n  }\n}];"
+        "functionCode": "const crypto = require('crypto');\n\nconst approvalId = crypto.randomUUID();\nconst callbackToken = crypto.randomBytes(32).toString('hex');\nconst timeoutMinutes = parseInt($json.timeout_minutes, 10);\nconst now = new Date();\nconst expiresAt = new Date(now.getTime() + timeoutMinutes * 60 * 1000);\nconst callbackExpiresAt = new Date(now.getTime() + (timeoutMinutes + 60) * 60 * 1000); // extra buffer for callback\n\n// Build callback URL (webhook that Wait node will listen on)\nconst baseUrl = $getEnv('N8N_PUBLIC_URL') || $getEnv('WEBHOOK_URL') || 'http://n8n.localhost';\nconst callbackUrl = `${baseUrl}/webhook/approval/callback/${approvalId}/${callbackToken}`;\n\n// Build Telegram message with inline keyboard\nconst message = `\ud83d\udd14 *Approval Request*\n\n*Action:* ${$json.action_type}\n*Risk:* ${$json.risk_level.toUpperCase()}\n*Summary:* ${$json.summary}\n*Requested by:* ${$json.requested_by}\n*Workflow:* ${$json.workflow_name} (${$json.workflow_id})\n*Execution:* ${$json.execution_id}\n*Expires:* ${expiresAt.toISOString()}\n\n*Details:*\n\\`\\`\\`json\n${JSON.stringify(JSON.parse($json.details), null, 2).slice(0, 500)}\n\\`\\`\\``;\n\nreturn [{\n  json: {\n    approval_id: approvalId,\n    callback_token: callbackToken,\n    callback_url: callbackUrl,\n    expires_at: expiresAt.toISOString(),\n    callback_expires_at: callbackExpiresAt.toISOString(),\n    message: message,\n    approver_primary: $json.approver_primary,\n    approver_secondary: $json.approver_secondary,\n    action_type: $json.action_type,\n    summary: $json.summary,\n    details: $json.details,\n    risk_level: $json.risk_level,\n    requested_by: $json.requested_by,\n    workflow_id: $json.workflow_id,\n    workflow_name: $json.workflow_name,\n    execution_id: $json.execution_id,\n    timeout_minutes: timeoutMinutes\n  }\n}];"
       },
       "id": "generate-approval",
       "name": "Generate Approval Record",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -97,7 +103,10 @@
       "name": "Insert Approval",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [680, 300],
+      "position": [
+        680,
+        300
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -108,14 +117,17 @@
         "text": "={{ $json.message }}",
         "parseMode": "Markdown",
         "options": {
-          "reply_markup": "={{ JSON.stringify({ inline_keyboard: [[{ text: '✅ Approve', callback_data: 'approve:' + $json.approval_id + ':' + $json.callback_token }, { text: '❌ Reject', callback_data: 'reject:' + $json.approval_id + ':' + $json.callback_token }]] }) }}"
+          "reply_markup": "={{ JSON.stringify({ inline_keyboard: [[{ text: '\u2705 Approve', callback_data: 'approve:' + $json.approval_id + ':' + $json.callback_token }, { text: '\u274c Reject', callback_data: 'reject:' + $json.approval_id + ':' + $json.callback_token }]] }) }}"
         }
       },
       "id": "telegram-request",
       "name": "Send Telegram Request",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.1,
-      "position": [900, 200],
+      "position": [
+        900,
+        200
+      ],
       "credentials": {
         "telegramApi": "telegram_credentials"
       }
@@ -135,7 +147,10 @@
       "name": "If Secondary Approver",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1.1,
-      "position": [1120, 200]
+      "position": [
+        1120,
+        200
+      ]
     },
     {
       "parameters": {
@@ -143,14 +158,17 @@
         "text": "={{ $json.message + '\\n\\n_(You are the secondary approver; will be notified if primary does not respond in time.)_' }}",
         "parseMode": "Markdown",
         "options": {
-          "reply_markup": "={{ JSON.stringify({ inline_keyboard: [[{ text: '✅ Approve', callback_data: 'approve:' + $json.approval_id + ':' + $json.callback_token }, { text: '❌ Reject', callback_data: 'reject:' + $json.approval_id + ':' + $json.callback_token }]] }) }}"
+          "reply_markup": "={{ JSON.stringify({ inline_keyboard: [[{ text: '\u2705 Approve', callback_data: 'approve:' + $json.approval_id + ':' + $json.callback_token }, { text: '\u274c Reject', callback_data: 'reject:' + $json.approval_id + ':' + $json.callback_token }]] }) }}"
         }
       },
       "id": "telegram-secondary",
       "name": "Notify Secondary",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.1,
-      "position": [1340, 100],
+      "position": [
+        1340,
+        100
+      ],
       "credentials": {
         "telegramApi": "telegram_credentials"
       }
@@ -164,7 +182,10 @@
       "name": "Wait for Decision",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [1120, 300]
+      "position": [
+        1120,
+        300
+      ]
     },
     {
       "parameters": {
@@ -177,7 +198,10 @@
       "name": "Approval Callback Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [900, 500]
+      "position": [
+        900,
+        500
+      ]
     },
     {
       "parameters": {
@@ -187,7 +211,10 @@
       "name": "Parse Callback",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [1120, 500]
+      "position": [
+        1120,
+        500
+      ]
     },
     {
       "parameters": {
@@ -203,7 +230,10 @@
       "name": "Get Approval",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [1340, 500],
+      "position": [
+        1340,
+        500
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -223,7 +253,10 @@
       "name": "If Exists",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1.1,
-      "position": [1560, 500]
+      "position": [
+        1560,
+        500
+      ]
     },
     {
       "parameters": {
@@ -240,7 +273,10 @@
       "name": "If Pending",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1.1,
-      "position": [1780, 500]
+      "position": [
+        1780,
+        500
+      ]
     },
     {
       "parameters": {
@@ -257,7 +293,10 @@
       "name": "If Valid Token",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1.1,
-      "position": [2000, 500]
+      "position": [
+        2000,
+        500
+      ]
     },
     {
       "parameters": {
@@ -274,7 +313,10 @@
       "name": "If Authorized",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1.1,
-      "position": [2220, 500]
+      "position": [
+        2220,
+        500
+      ]
     },
     {
       "parameters": {
@@ -299,20 +341,26 @@
       "name": "Update Approval",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [2440, 500],
+      "position": [
+        2440,
+        500
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
     },
     {
       "parameters": {
-        "functionCode": "const approval = $json[0];\nconst actionText = $json.action === 'approve' ? '✅ APPROVED' : '❌ REJECTED';\nconst userName = $json.callback_query?.from?.first_name || 'User';\n\nreturn [{\n  json: {\n    approval_id: $json.approval_id,\n    action: $json.action,\n    decided_by: $json.user_id,\n    decided_at: new Date().toISOString(),\n    message: `${actionText} by ${userName} (${$json.user_id})`\n  }\n}];"
+        "functionCode": "const approval = $json[0];\nconst actionText = $json.action === 'approve' ? '\u2705 APPROVED' : '\u274c REJECTED';\nconst userName = $json.callback_query?.from?.first_name || 'User';\n\nreturn [{\n  json: {\n    approval_id: $json.approval_id,\n    action: $json.action,\n    decided_by: $json.user_id,\n    decided_at: new Date().toISOString(),\n    message: `${actionText} by ${userName} (${$json.user_id})`\n  }\n}];"
       },
       "id": "prepare-decision-result",
       "name": "Prepare Decision Result",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [2660, 500]
+      "position": [
+        2660,
+        500
+      ]
     },
     {
       "parameters": {
@@ -325,7 +373,10 @@
       "name": "Respond Callback",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [2880, 500]
+      "position": [
+        2880,
+        500
+      ]
     },
     {
       "parameters": {
@@ -335,7 +386,10 @@
       "name": "Not Found",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [2000, 300]
+      "position": [
+        2000,
+        300
+      ]
     },
     {
       "parameters": {
@@ -345,7 +399,10 @@
       "name": "Not Pending",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [2000, 400]
+      "position": [
+        2000,
+        400
+      ]
     },
     {
       "parameters": {
@@ -355,7 +412,10 @@
       "name": "Invalid Token",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [2000, 500]
+      "position": [
+        2000,
+        500
+      ]
     },
     {
       "parameters": {
@@ -365,7 +425,10 @@
       "name": "Unauthorized",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [2000, 600]
+      "position": [
+        2000,
+        600
+      ]
     },
     {
       "parameters": {
@@ -378,7 +441,10 @@
       "name": "Respond Error",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [2220, 400]
+      "position": [
+        2220,
+        400
+      ]
     },
     {
       "parameters": {
@@ -388,7 +454,10 @@
       "name": "Check Timeout",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [1340, 300]
+      "position": [
+        1340,
+        300
+      ]
     },
     {
       "parameters": {
@@ -405,7 +474,10 @@
       "name": "If Escalate",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1.1,
-      "position": [1560, 300]
+      "position": [
+        1560,
+        300
+      ]
     },
     {
       "parameters": {
@@ -421,7 +493,10 @@
       "name": "Mark Escalated",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [1780, 300],
+      "position": [
+        1780,
+        300
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -429,17 +504,20 @@
     {
       "parameters": {
         "chatId": "={{ $json.approver_secondary }}",
-        "text": "⚠️ *Escalation: Approval Timeout*\n\nPrimary approver did not respond in time.\n\n*Action:* {{ $json.action_type }}\n*Summary:* {{ $json.summary }}\n*Workflow:* {{ $json.workflow_name }}\n*Original request:* {{ $json.created_at }}\n\nPlease review and decide.",
+        "text": "\u26a0\ufe0f *Escalation: Approval Timeout*\n\nPrimary approver did not respond in time.\n\n*Action:* {{ $json.action_type }}\n*Summary:* {{ $json.summary }}\n*Workflow:* {{ $json.workflow_name }}\n*Original request:* {{ $json.created_at }}\n\nPlease review and decide.",
         "parseMode": "Markdown",
         "options": {
-          "reply_markup": "={{ JSON.stringify({ inline_keyboard: [[{ text: '✅ Approve', callback_data: 'approve:' + $json.approval_id + ':' + $json.callback_token }, { text: '❌ Reject', callback_data: 'reject:' + $json.approval_id + ':' + $json.callback_token }]] }) }}"
+          "reply_markup": "={{ JSON.stringify({ inline_keyboard: [[{ text: '\u2705 Approve', callback_data: 'approve:' + $json.approval_id + ':' + $json.callback_token }, { text: '\u274c Reject', callback_data: 'reject:' + $json.approval_id + ':' + $json.callback_token }]] }) }}"
         }
       },
       "id": "telegram-escalation",
       "name": "Send Escalation",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.1,
-      "position": [1780, 100],
+      "position": [
+        1780,
+        100
+      ],
       "credentials": {
         "telegramApi": "telegram_credentials"
       }
@@ -453,7 +531,10 @@
       "name": "Wait Escalation",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [1780, 400]
+      "position": [
+        1780,
+        400
+      ]
     },
     {
       "parameters": {
@@ -469,7 +550,10 @@
       "name": "Mark Expired",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [2000, 300],
+      "position": [
+        2000,
+        300
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -482,7 +566,10 @@
       "name": "Final Result",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [2220, 300]
+      "position": [
+        2220,
+        300
+      ]
     }
   ],
   "connections": {
@@ -667,20 +754,8 @@
     },
     "If Exists": {
       "main": [
-        [
-          {
-            "node": "If Pending",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Not Found",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [],
+        []
       ]
     },
     "If Pending": {
@@ -813,12 +888,6 @@
         []
       ]
     },
-    "If Exists": {
-      "main": [
-        [],
-        []
-      ]
-    },
     "Final Result": {
       "main": [
         []
@@ -829,6 +898,10 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "id": "request_approval",
-  "tags": ["approvals", "human-in-the-loop", "utility"]
+  "id": "8c39599f-ce5d-4f63-8ba0-1ae6517bb6ae",
+  "tags": [
+    "approvals",
+    "human-in-the-loop",
+    "utility"
+  ]
 }

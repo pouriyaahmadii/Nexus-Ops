@@ -7,7 +7,10 @@
       "name": "Error Trigger",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -17,7 +20,10 @@
       "name": "Prepare DLQ Record",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -42,7 +48,10 @@
       "name": "Insert to DLQ",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [680, 300],
+      "position": [
+        680,
+        300
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -55,12 +64,15 @@
       "name": "Prepare Alert",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
         "chatId": "={{ $getEnv('ALERT_TELEGRAM_CHAT_ID') }}",
-        "text": "🚨 *NexusOps Error Alert*\n\n*Workflow:* {{ $json.workflow_name }} ({{ $json.workflow_id }})\n*Node:* {{ $json.node_name }}\n*Execution:* [{{ $json.execution_id }}]({{ $json.execution_url }})\n*Error:* {{ $json.error_message }}\n*Severity:* {{ $json.severity }}\n*Time:* {{ $now.format('YYYY-MM-DD HH:mm:ss Z') }}",
+        "text": "\ud83d\udea8 *NexusOps Error Alert*\n\n*Workflow:* {{ $json.workflow_name }} ({{ $json.workflow_id }})\n*Node:* {{ $json.node_name }}\n*Execution:* [{{ $json.execution_id }}]({{ $json.execution_url }})\n*Error:* {{ $json.error_message }}\n*Severity:* {{ $json.severity }}\n*Time:* {{ $now.format('YYYY-MM-DD HH:mm:ss Z') }}",
         "parseMode": "Markdown",
         "options": {
           "disableNotification": false
@@ -70,7 +82,10 @@
       "name": "Send Telegram Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.1,
-      "position": [1120, 300],
+      "position": [
+        1120,
+        300
+      ],
       "credentials": {
         "telegramApi": "telegram_credentials"
       }
@@ -93,7 +108,10 @@
       "name": "Upsert Dedupe",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [1120, 500],
+      "position": [
+        1120,
+        500
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -154,6 +172,9 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "id": "global-error-handler",
-  "tags": ["core", "error-handling"]
+  "id": "6ae3e65f-f263-4ded-bc98-d691213f78c6",
+  "tags": [
+    "core",
+    "error-handling"
+  ]
 }

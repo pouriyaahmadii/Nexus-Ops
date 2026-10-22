@@ -12,7 +12,10 @@
       "name": "Webhook: Inbound Request",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -45,7 +48,10 @@
       "name": "Validate & Prepare",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.2,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -62,7 +68,10 @@
       "name": "If Has Text",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1.1,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -72,7 +81,10 @@
       "name": "Bad Request",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [900, 100]
+      "position": [
+        900,
+        100
+      ]
     },
     {
       "parameters": {
@@ -85,7 +97,10 @@
       "name": "Respond Error",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1120, 100]
+      "position": [
+        1120,
+        100
+      ]
     },
     {
       "parameters": {
@@ -95,7 +110,10 @@
       "name": "Determine Approval Need",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -106,7 +124,10 @@
       "name": "Check Approval Policy",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
-      "position": [1120, 200]
+      "position": [
+        1120,
+        200
+      ]
     },
     {
       "parameters": {
@@ -123,7 +144,10 @@
       "name": "If Needs Approval",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1.1,
-      "position": [1340, 200]
+      "position": [
+        1340,
+        200
+      ]
     },
     {
       "parameters": {
@@ -134,7 +158,10 @@
       "name": "Request Human Approval",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
-      "position": [1560, 100]
+      "position": [
+        1560,
+        100
+      ]
     },
     {
       "parameters": {
@@ -151,7 +178,10 @@
       "name": "If Approved",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1.1,
-      "position": [1780, 100]
+      "position": [
+        1780,
+        100
+      ]
     },
     {
       "parameters": {
@@ -161,7 +191,10 @@
       "name": "Rejected Path",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [1780, 300]
+      "position": [
+        1780,
+        300
+      ]
     },
     {
       "parameters": {
@@ -171,7 +204,10 @@
       "name": "Approved Path",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [1780, 500]
+      "position": [
+        1780,
+        500
+      ]
     },
     {
       "parameters": {
@@ -181,7 +217,10 @@
       "name": "No Approval Needed",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [1340, 400]
+      "position": [
+        1340,
+        400
+      ]
     },
     {
       "parameters": {
@@ -197,7 +236,10 @@
       "name": "RAG: Query Similar Cases",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [2000, 300],
+      "position": [
+        2000,
+        300
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -210,7 +252,10 @@
       "name": "Prepare LLM Prompt",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [2220, 300]
+      "position": [
+        2220,
+        300
+      ]
     },
     {
       "parameters": {
@@ -221,7 +266,10 @@
       "name": "LLM Call (with Retry)",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
-      "position": [2440, 300]
+      "position": [
+        2440,
+        300
+      ]
     },
     {
       "parameters": {
@@ -238,7 +286,10 @@
       "name": "If LLM Success",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1.1,
-      "position": [2660, 300]
+      "position": [
+        2660,
+        300
+      ]
     },
     {
       "parameters": {
@@ -248,7 +299,10 @@
       "name": "LLM Failed",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [2880, 100]
+      "position": [
+        2880,
+        100
+      ]
     },
     {
       "parameters": {
@@ -258,7 +312,10 @@
       "name": "Parse LLM Response",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [2880, 300]
+      "position": [
+        2880,
+        300
+      ]
     },
     {
       "parameters": {
@@ -269,7 +326,10 @@
       "name": "Log LLM Usage",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
-      "position": [3100, 300]
+      "position": [
+        3100,
+        300
+      ]
     },
     {
       "parameters": {
@@ -287,7 +347,10 @@
       "name": "If Not Rejected",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1.1,
-      "position": [3320, 300]
+      "position": [
+        3320,
+        300
+      ]
     },
     {
       "parameters": {
@@ -311,7 +374,10 @@
       "name": "Insert to Outbox",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [3540, 200],
+      "position": [
+        3540,
+        200
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -324,7 +390,10 @@
       "name": "Sent Path",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [3760, 200]
+      "position": [
+        3760,
+        200
+      ]
     },
     {
       "parameters": {
@@ -348,7 +417,10 @@
       "name": "Insert for Manual Review",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [3540, 400],
+      "position": [
+        3540,
+        400
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -361,7 +433,10 @@
       "name": "Manual Review Path",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [3760, 400]
+      "position": [
+        3760,
+        400
+      ]
     },
     {
       "parameters": {
@@ -374,7 +449,10 @@
       "name": "Respond Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [3980, 300]
+      "position": [
+        3980,
+        300
+      ]
     }
   ],
   "connections": {
@@ -682,6 +760,11 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "id": "showcase_ai_ops",
-  "tags": ["demo", "showcase", "triage", "ai-ops"]
+  "id": "15b2c692-7b4e-4eb2-b1c5-bb05dcd3ba37",
+  "tags": [
+    "demo",
+    "showcase",
+    "triage",
+    "ai-ops"
+  ]
 }

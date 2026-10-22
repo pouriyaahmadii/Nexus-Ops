@@ -11,7 +11,10 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -28,7 +31,10 @@
       "name": "Work A",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [460, 200]
+      "position": [
+        460,
+        200
+      ]
     },
     {
       "parameters": {
@@ -45,7 +51,10 @@
       "name": "Work B",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [460, 400]
+      "position": [
+        460,
+        400
+      ]
     },
     {
       "parameters": {},
@@ -53,7 +62,10 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     }
   ],
   "connections": {
@@ -98,6 +110,6 @@
   },
   "active": false,
   "settings": {},
-  "id": "bench-01",
+  "id": "6e08c6f7-7645-475e-a40b-05e1a7f50a1d",
   "tags": []
 }

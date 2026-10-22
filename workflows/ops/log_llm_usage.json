@@ -9,7 +9,10 @@
       "name": "Normalize Usage",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -37,7 +40,10 @@
       "name": "Insert Usage",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [460, 300],
+      "position": [
+        460,
+        300
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -50,7 +56,10 @@
       "name": "Result",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     }
   ],
   "connections": {
@@ -81,6 +90,11 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "id": "log_llm_usage",
-  "tags": ["ops", "llm", "cost-tracking", "utility"]
+  "id": "cbcfc21b-3c2f-4649-82ba-ffdfe3f19816",
+  "tags": [
+    "ops",
+    "llm",
+    "cost-tracking",
+    "utility"
+  ]
 }

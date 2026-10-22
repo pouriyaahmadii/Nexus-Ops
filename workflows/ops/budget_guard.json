@@ -17,7 +17,10 @@
       "name": "Schedule (hourly)",
       "type": "n8n-nodes-base.cron",
       "typeVersion": 1.1,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -27,7 +30,10 @@
       "name": "Get Config",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -44,7 +50,10 @@
       "name": "If Configured",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1.1,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -55,7 +64,10 @@
       "name": "Get MTD Cost",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.1,
-      "position": [900, 200],
+      "position": [
+        900,
+        200
+      ],
       "credentials": {
         "postgres": "ops_writer_credentials"
       }
@@ -68,7 +80,10 @@
       "name": "Calculate Percentage",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [1120, 200]
+      "position": [
+        1120,
+        200
+      ]
     },
     {
       "parameters": {
@@ -85,12 +100,15 @@
       "name": "If Alert Needed",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1.1,
-      "position": [1340, 200]
+      "position": [
+        1340,
+        200
+      ]
     },
     {
       "parameters": {
         "chatId": "={{ $getEnv('ALERT_TELEGRAM_CHAT_ID') }}",
-        "text": "⚠️ *LLM Budget Alert*\n\n*Status:* {{ $json.is_critical ? '🔴 CRITICAL' : '🟡 WARNING' }}\n*Month-to-date:* ${{ $json.mtd_cost_usd.toFixed(2) }}\n*Budget:* ${{ $json.budget_usd.toFixed(2) }}\n*Used:* {{ ($json.pct_used * 100).toFixed(1) }}%\n*Warning at:* {{ ($json.threshold_warning * 100).toFixed(0) }}%\n*Critical at:* {{ ($json.threshold_critical * 100).toFixed(0) }}%\n*Enforce:* {{ $json.enforce ? 'YES' : 'NO' }}\n\n{{ $json.is_critical && $json.enforce ? '🛑 Workflows tagged \"llm-guarded\" will be deactivated.' : '' }}\n*Time:* {{ $now.format('YYYY-MM-DD HH:mm:ss Z') }}",
+        "text": "\u26a0\ufe0f *LLM Budget Alert*\n\n*Status:* {{ $json.is_critical ? '\ud83d\udd34 CRITICAL' : '\ud83d\udfe1 WARNING' }}\n*Month-to-date:* ${{ $json.mtd_cost_usd.toFixed(2) }}\n*Budget:* ${{ $json.budget_usd.toFixed(2) }}\n*Used:* {{ ($json.pct_used * 100).toFixed(1) }}%\n*Warning at:* {{ ($json.threshold_warning * 100).toFixed(0) }}%\n*Critical at:* {{ ($json.threshold_critical * 100).toFixed(0) }}%\n*Enforce:* {{ $json.enforce ? 'YES' : 'NO' }}\n\n{{ $json.is_critical && $json.enforce ? '\ud83d\uded1 Workflows tagged \"llm-guarded\" will be deactivated.' : '' }}\n*Time:* {{ $now.format('YYYY-MM-DD HH:mm:ss Z') }}",
         "parseMode": "Markdown",
         "options": {
           "disableNotification": "{{ $json.is_critical }}"
@@ -100,7 +118,10 @@
       "name": "Send Telegram Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.1,
-      "position": [1560, 100],
+      "position": [
+        1560,
+        100
+      ],
       "credentials": {
         "telegramApi": "telegram_credentials"
       }
@@ -120,7 +141,10 @@
       "name": "If Enforce",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1.1,
-      "position": [1560, 300]
+      "position": [
+        1560,
+        300
+      ]
     },
     {
       "parameters": {
@@ -135,7 +159,10 @@
       "name": "List Workflows",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1780, 200]
+      "position": [
+        1780,
+        200
+      ]
     },
     {
       "parameters": {
@@ -145,7 +172,10 @@
       "name": "Filter Guarded",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [2000, 200]
+      "position": [
+        2000,
+        200
+      ]
     },
     {
       "parameters": {
@@ -155,7 +185,10 @@
       "name": "Split Guarded",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 1.1,
-      "position": [2220, 200]
+      "position": [
+        2220,
+        200
+      ]
     },
     {
       "parameters": {
@@ -170,7 +203,10 @@
       "name": "Deactivate Workflow",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [2440, 200]
+      "position": [
+        2440,
+        200
+      ]
     },
     {
       "parameters": {
@@ -180,7 +216,10 @@
       "name": "Record Deactivation",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [2660, 200]
+      "position": [
+        2660,
+        200
+      ]
     },
     {
       "parameters": {
@@ -190,7 +229,10 @@
       "name": "Result",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1.1,
-      "position": [2880, 200]
+      "position": [
+        2880,
+        200
+      ]
     }
   ],
   "connections": {
@@ -254,18 +296,12 @@
       "main": [
         [
           {
-            "node": "Send Telegram Alert",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
             "node": "Result",
             "type": "main",
             "index": 0
           }
-        ]
+        ],
+        []
       ]
     },
     "Send Telegram Alert": {
@@ -351,24 +387,17 @@
           }
         ]
       ]
-    },
-    "If Alert Needed": {
-      "main": [
-        [
-          {
-            "node": "Result",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        []
-      ]
     }
   },
   "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "id": "budget_guard",
-  "tags": ["ops", "llm", "budget", "guard"]
+  "id": "47594618-2e73-4e4a-aea5-cd8ac0de7dab",
+  "tags": [
+    "ops",
+    "llm",
+    "budget",
+    "guard"
+  ]
 }

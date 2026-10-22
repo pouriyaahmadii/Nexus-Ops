@@ -391,6 +391,28 @@ services:
       timeout: 5s
       retries: 1
 
+  # --------------------------------------------------------------------------
+  # Mock LLM Service (demo profile only)
+  # --------------------------------------------------------------------------
+  mock-llm:
+    <<: *common
+    build:
+      context: ./infra/mock-llm
+      dockerfile: Dockerfile
+    container_name: nexusops_mock_llm
+    environment:
+      PORT: 8080
+      MOCK_FAILURE_RATE: 0.3
+    profiles: ["demo"]
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
 volumes:
   postgres_data:
   redis_data:

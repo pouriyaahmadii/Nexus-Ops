@@ -1,0 +1,687 @@
+{
+  "name": "Showcase: Smart Inbound Request Triage",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "triage",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook: Inbound Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "fields": {
+          "string": [
+            {
+              "name": "correlation_id",
+              "value": "={{ $json.body.correlation_id || $now.format('x') + '_' + $randomString(8) }}"
+            },
+            {
+              "name": "customer_email",
+              "value": "={{ $json.body.email || 'unknown@example.com' }}"
+            },
+            {
+              "name": "request_text",
+              "value": "={{ $json.body.text || $json.body.message || '' }}"
+            },
+            {
+              "name": "amount_usd",
+              "value": "={{ $json.body.amount_usd || 0 }}"
+            },
+            {
+              "name": "demo_mode",
+              "value": "={{ $getEnv('DEMO_MODE') || 'mock' }}"
+            }
+          ]
+        }
+      },
+      "id": "validate-input",
+      "name": "Validate & Prepare",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.request_text }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "if-has-text",
+      "name": "If Has Text",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { error: 'Missing request text', status: 400 } }];"
+      },
+      "id": "bad-request",
+      "name": "Bad Request",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [900, 100]
+    },
+    {
+      "parameters": {
+        "options": {
+          "respondWith": "json",
+          "respondJson": "={{ { success: false, error: $json.error, status: $json.status } }}"
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 100]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Check if approval needed using needs_approval workflow\nconst actionType = $json.amount_usd > 100 ? 'spend_money' : 'external_api';\nconst riskLevel = $json.amount_usd > 500 ? 'high' : ($json.amount_usd > 100 ? 'medium' : 'low');\n\nreturn [{\n  json: {\n    ...$json,\n    action_type: actionType,\n    risk_level: riskLevel,\n    needs_approval_check: {\n      action_type: actionType,\n      risk_level: riskLevel,\n      context: {\n        amount_usd: $json.amount_usd,\n        request_text: $json.request_text\n      }\n    }\n  }\n}];"
+      },
+      "id": "determine-approval",
+      "name": "Determine Approval Need",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "needs_approval",
+        "options": {}
+      },
+      "id": "check-policy",
+      "name": "Check Approval Policy",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.needs_approval }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-needs-approval",
+      "name": "If Needs Approval",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "workflowId": "request_approval",
+        "options": {}
+      },
+      "id": "request-approval",
+      "name": "Request Human Approval",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [1560, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.approved }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-approved",
+      "name": "If Approved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [1780, 100]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { ...$json, approval_status: 'rejected', approval_reason: $json.reason } }];"
+      },
+      "id": "rejected-path",
+      "name": "Rejected Path",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { ...$json, approval_status: 'approved', approval_reason: $json.reason } }];"
+      },
+      "id": "approved-path",
+      "name": "Approved Path",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [1780, 500]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { ...$json, approval_status: 'not_required' } }];"
+      },
+      "id": "no-approval-needed",
+      "name": "No Approval Needed",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "query": "SELECT id, payload FROM kb_demo WHERE payload->>'category' = $1 ORDER BY id LIMIT 3;",
+        "queryParameters": [
+          {
+            "parameter": "={{ $json.risk_level === 'high' ? 'refund' : ($json.risk_level === 'medium' ? 'billing' : 'general') }}"
+          }
+        ],
+        "options": {}
+      },
+      "id": "rag-query",
+      "name": "RAG: Query Similar Cases",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [2000, 300],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Prepare LLM prompt with RAG context\nconst similarCases = $json.length > 0 ? $json.map(r => r.payload.text).join('\\n- ') : 'None';\n\nconst systemPrompt = `You are a customer support triage agent. Classify the request and draft a professional reply.\n\nSimilar past cases:\n- ${similarCases}\n\nRespond with JSON only:\n{\n  \"intent\": \"refund_request|billing_inquiry|account_deletion|data_deletion|legal_request|complaint|general_inquiry\",\n  \"risk_level\": \"low|medium|high\",\n  \"reply\": \"Professional reply text\",\n  \"confidence\": 0.95\n}`;\n\nreturn [{\n  json: {\n    provider: $json.demo_mode === 'mock' ? 'mock' : 'openai',\n    model: $json.demo_mode === 'mock' ? 'mock-model' : 'gpt-4o-mini',\n    messages: [\n      { role: 'system', content: systemPrompt },\n      { role: 'user', content: $json.request_text }\n    ],\n    temperature: 0.3,\n    max_tokens: 500\n  }\n}];"
+      },
+      "id": "prepare-llm",
+      "name": "Prepare LLM Prompt",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [2220, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "retry_with_backoff",
+        "options": {}
+      },
+      "id": "llm-with-retry",
+      "name": "LLM Call (with Retry)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [2440, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.success }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-llm-success",
+      "name": "If LLM Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [2660, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { error: 'LLM call failed after retries', status: 500, details: $json } }];"
+      },
+      "id": "llm-failed",
+      "name": "LLM Failed",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [2880, 100]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parse LLM response and log usage\nconst response = $json.data || $json;\nlet parsed;\ntry {\n  parsed = JSON.parse(response.choices?.[0]?.message?.content || '{}');\n} catch {\n  parsed = { intent: 'general_inquiry', risk_level: 'low', reply: response.choices?.[0]?.message?.content || 'Thank you for your request.' };\n}\n\nreturn [{\n  json: {\n    ...$json,\n    llm_intent: parsed.intent || 'general_inquiry',\n    llm_risk_level: parsed.risk_level || 'low',\n    llm_reply: parsed.reply || 'Thank you for your request.',\n    llm_confidence: parsed.confidence || 0.5,\n    llm_raw_response: response\n  }\n}];"
+      },
+      "id": "parse-llm",
+      "name": "Parse LLM Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [2880, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "log_llm_usage",
+        "options": {}
+      },
+      "id": "log-usage",
+      "name": "Log LLM Usage",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [3100, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.approval_status }}",
+              "operation": "notEquals",
+              "value2": "rejected"
+            }
+          ]
+        }
+      },
+      "id": "if-not-rejected",
+      "name": "If Not Rejected",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [3320, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "ops",
+        "table": "demo_outbox",
+        "columns": [
+          "correlation_id",
+          "workflow_id",
+          "execution_id",
+          "action_type",
+          "recipient",
+          "subject",
+          "body",
+          "status",
+          "metadata"
+        ],
+        "options": {}
+      },
+      "id": "insert-outbox",
+      "name": "Insert to Outbox",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [3540, 200],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { ...$json, outbox_status: 'sent', sent_at: new Date().toISOString() } }];"
+      },
+      "id": "sent-path",
+      "name": "Sent Path",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [3760, 200]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "ops",
+        "table": "demo_outbox",
+        "columns": [
+          "correlation_id",
+          "workflow_id",
+          "execution_id",
+          "action_type",
+          "recipient",
+          "subject",
+          "body",
+          "status",
+          "metadata"
+        ],
+        "options": {}
+      },
+      "id": "insert-manual",
+      "name": "Insert for Manual Review",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [3540, 400],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { ...$json, outbox_status: 'manual_review', reason: $json.approval_reason } }];"
+      },
+      "id": "manual-path",
+      "name": "Manual Review Path",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [3760, 400]
+    },
+    {
+      "parameters": {
+        "options": {
+          "respondWith": "json",
+          "respondJson": "={{ { success: true, correlation_id: $json.correlation_id, intent: $json.llm_intent, risk_level: $json.llm_risk_level, approval_status: $json.approval_status, outbox_status: $json.outbox_status, reply: $json.llm_reply, cost_usd: $json.total_cost_usd } }}"
+        }
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3980, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: Inbound Request": {
+      "main": [
+        [
+          {
+            "node": "Validate & Prepare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Prepare": {
+      "main": [
+        [
+          {
+            "node": "If Has Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Has Text": {
+      "main": [
+        [
+          {
+            "node": "Determine Approval Need",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bad Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bad Request": {
+      "main": [
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Approval Need": {
+      "main": [
+        [
+          {
+            "node": "Check Approval Policy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Approval Policy": {
+      "main": [
+        [
+          {
+            "node": "If Needs Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Needs Approval": {
+      "main": [
+        [
+          {
+            "node": "Request Human Approval",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Approval Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Human Approval": {
+      "main": [
+        [
+          {
+            "node": "If Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Approved": {
+      "main": [
+        [
+          {
+            "node": "Approved Path",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rejected Path",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Approval Needed": {
+      "main": [
+        [
+          {
+            "node": "RAG: Query Similar Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved Path": {
+      "main": [
+        [
+          {
+            "node": "RAG: Query Similar Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rejected Path": {
+      "main": [
+        [
+          {
+            "node": "RAG: Query Similar Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG: Query Similar Cases": {
+      "main": [
+        [
+          {
+            "node": "Prepare LLM Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare LLM Prompt": {
+      "main": [
+        [
+          {
+            "node": "LLM Call (with Retry)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Call (with Retry)": {
+      "main": [
+        [
+          {
+            "node": "If LLM Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If LLM Success": {
+      "main": [
+        [
+          {
+            "node": "Parse LLM Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "LLM Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Failed": {
+      "main": [
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse LLM Response": {
+      "main": [
+        [
+          {
+            "node": "Log LLM Usage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log LLM Usage": {
+      "main": [
+        [
+          {
+            "node": "If Not Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Not Rejected": {
+      "main": [
+        [
+          {
+            "node": "Insert to Outbox",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insert for Manual Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert to Outbox": {
+      "main": [
+        [
+          {
+            "node": "Sent Path",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert for Manual Review": {
+      "main": [
+        [
+          {
+            "node": "Manual Review Path",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sent Path": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Review Path": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "showcase_ai_ops",
+  "tags": ["demo", "showcase", "triage", "ai-ops"]
+}

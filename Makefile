@@ -61,8 +61,8 @@ restore-test: ## Run automated restore drill in isolated environment
 	    -e BACKUP_S3_SECRET_KEY="$(BACKUP_S3_SECRET_KEY)" \
 	    nexusops-backup:latest /scripts/restore-test.sh
 
-demo: ## Run end-to-end showcase workflow (Phase 9)
-	@echo "[demo] Placeholder: Showcase workflow trigger will be introduced in Phase 9."
+demo: ## Run end-to-end showcase workflow in mock mode (Phase 9)
+	@DEMO_MODE=mock bash scripts/demo.sh run
 
 lint: ## Run syntax and lint checks across repository files
 	@echo "==> Running syntax and hygiene checks..."

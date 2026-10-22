@@ -1,5 +1,6 @@
--- Unit-style SQL tests for LLM cost computation
+-- SQL Tests for LLM Cost Computation
 -- Run with: psql -U nexusops -d nexusops -f tests/sql/test_llm_cost.sql
+-- Or via pytest: pytest tests/sql/test_llm_cost.py
 
 \set ON_ERROR_STOP on
 
@@ -88,8 +89,8 @@ SELECT * FROM ops.fn_compute_llm_cost(
 -- ============================================================================
 -- Test 6: Price change mid-month (valid_to logic)
 -- Old price valid until 2024-06-30, new price from 2024-07-01
--- Query on 2024-06-15 → should use old price ($100/$200)
--- Query on 2024-07-15 → should use new price ($10/$20)
+-- Query on 2024-06-15 -> should use old price ($100/$200)
+-- Query on 2024-07-15 -> should use new price ($10/$20)
 -- ============================================================================
 
 SELECT 'Test 6a: Old price (June)' AS test_name;

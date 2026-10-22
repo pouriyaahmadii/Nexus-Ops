@@ -8,7 +8,7 @@ SHELL := /bin/bash
 COMPOSE_PROJECT_NAME ?= nexusops
 COMPOSE_FILE ?= compose.yaml
 
-.PHONY: help up down restart logs ps doctor backup backup-list restore restore-test demo upgrade rollback lint scale workers env-check clean
+.PHONY: help up down restart logs ps doctor backup backup-list restore restore-test demo upgrade rollback lint scale workers env-check clean test test-fast test-smoke test-integration test-sql test-restore
 
 help: ## Print this formatted list of targets with descriptions
 	@echo "NexusOps Management CLI"
@@ -109,6 +109,40 @@ workers: ## Show n8n worker status
 
 env-check: ## Validate .env file has all required variables
 	@bash scripts/env-check.sh
+
+test: ## Run full test suite (smoke + integration + sql + restore)
+	@echo "==> Running smoke tests..."
+	@bash tests/smoke/smoke.sh
+	@echo "==> Running SQL tests..."
+	@docker exec -i nexusops_postgres psql -U nexusops -d nexusops -f tests/sql/test_llm_cost.sql
+	@echo "==> Running integration tests..."
+	@if command -v pytest >/dev/null 2>&1; then \
+		pytest tests/integration -v --tb=short; \
+	else \
+		echo "pytest not installed. Run: pip install pytest pytest-asyncio httpx docker asyncpg"; \
+	fi
+	@echo "==> Running restore tests..."
+	@bash tests/restore/restore_test.sh
+	@echo "All tests passed!"
+
+test-fast: ## Run only smoke tests (fastest)
+	@bash tests/smoke/smoke.sh
+
+test-smoke: ## Run smoke tests only
+	@bash tests/smoke/smoke.sh
+
+test-integration: ## Run integration tests only (requires pytest)
+	@if command -v pytest >/dev/null 2>&1; then \
+		pytest tests/integration -v --tb=short; \
+	else \
+		echo "pytest not installed. Run: pip install pytest pytest-asyncio httpx docker asyncpg"; \
+	fi
+
+test-sql: ## Run SQL tests only
+	@docker exec -i nexusops_postgres psql -U nexusops -d nexusops -f tests/sql/test_llm_cost.sql
+
+test-restore: ## Run restore test only
+	@bash tests/restore/restore_test.sh
 
 clean: ## Remove all containers, volumes, and networks (with confirmation)
 	@echo "⚠️  This will DELETE all data including volumes!"

@@ -1,0 +1,92 @@
+{
+  "name": "Needs Approval Check",
+  "nodes": [
+    {
+      "parameters": {
+        "fields": {
+          "string": [
+            {
+              "name": "action_type",
+              "value": "={{ $json.action_type }}"
+            },
+            {
+              "name": "risk_level",
+              "value": "={{ $json.risk_level || 'medium' }}"
+            },
+            {
+              "name": "context",
+              "value": "={{ JSON.stringify($json.context || {}) }}"
+            }
+          ]
+        }
+      },
+      "id": "prepare-input",
+      "name": "Prepare Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "query": "SELECT requires_approval, default_timeout_min, escalation_timeout_min FROM ops.approval_policies WHERE action_type = $1 AND risk_level = $2;",
+        "queryParameters": [
+          {
+            "parameter": "={{ $json.action_type }}"
+          },
+          {
+            "parameter": "={{ $json.risk_level }}"
+          }
+        ],
+        "options": {}
+      },
+      "id": "get-policy",
+      "name": "Get Policy",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [460, 300],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const policy = $json[0] || { requires_approval: false, default_timeout_min: 30, escalation_timeout_min: 15 };\nconst context = JSON.parse($json.context || '{}');\n\nlet needsApproval = policy.requires_approval;\n\n// Evaluate condition_json if present\nif (policy.condition_json && Object.keys(policy.condition_json).length > 0) {\n  const condition = policy.condition_json;\n  \n  if (condition.recipients_gt && context.recipients > condition.recipients_gt) {\n    needsApproval = true;\n  } else if (condition.rows_gt && context.rows > condition.rows_gt) {\n    needsApproval = true;\n  } else if (condition.amount_usd_gt && context.amount_usd > condition.amount_usd_gt) {\n    needsApproval = true;\n  } else if (condition.writes && context.writes === true) {\n    needsApproval = true;\n  } else if (condition.critical && context.critical === true) {\n    needsApproval = true;\n  } else {\n    needsApproval = false;\n  }\n}\n\nreturn [{\n  json: {\n    needs_approval: needsApproval,\n    action_type: $json.action_type,\n    risk_level: $json.risk_level,\n    policy: policy,\n    context: context,\n    timeout_minutes: needsApproval ? policy.default_timeout_min : 0,\n    escalation_timeout_min: needsApproval ? policy.escalation_timeout_min : 0\n  }\n}];"
+      },
+      "id": "evaluate-policy",
+      "name": "Evaluate Policy",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Prepare Input": {
+      "main": [
+        [
+          {
+            "node": "Get Policy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Policy": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Policy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "needs_approval",
+  "tags": ["approvals", "policy", "utility"]
+}

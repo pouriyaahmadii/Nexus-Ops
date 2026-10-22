@@ -1,0 +1,834 @@
+{
+  "name": "Request Approval",
+  "nodes": [
+    {
+      "parameters": {
+        "fields": {
+          "string": [
+            {
+              "name": "action_type",
+              "value": "={{ $json.action_type }}"
+            },
+            {
+              "name": "summary",
+              "value": "={{ $json.summary }}"
+            },
+            {
+              "name": "details",
+              "value": "={{ JSON.stringify($json.details || {}) }}"
+            },
+            {
+              "name": "risk_level",
+              "value": "={{ $json.risk_level || 'medium' }}"
+            },
+            {
+              "name": "timeout_minutes",
+              "value": "={{ $json.timeout_minutes || 30 }}"
+            },
+            {
+              "name": "approver_primary",
+              "value": "={{ $json.approver_primary || $getEnv('DEFAULT_APPROVER_PRIMARY') }}"
+            },
+            {
+              "name": "approver_secondary",
+              "value": "={{ $json.approver_secondary || $getEnv('DEFAULT_APPROVER_SECONDARY') }}"
+            },
+            {
+              "name": "requested_by",
+              "value": "={{ $json.requested_by || $getEnv('N8N_WORKFLOW_NAME') }}"
+            },
+            {
+              "name": "workflow_id",
+              "value": "={{ $json.workflow_id || $getEnv('N8N_WORKFLOW_ID') }}"
+            },
+            {
+              "name": "workflow_name",
+              "value": "={{ $json.workflow_name || $getEnv('N8N_WORKFLOW_NAME') }}"
+            },
+            {
+              "name": "execution_id",
+              "value": "={{ $json.execution_id || $getEnv('N8N_EXECUTION_ID') }}"
+            }
+          ]
+        }
+      },
+      "id": "prepare-input",
+      "name": "Prepare Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const crypto = require('crypto');\n\nconst approvalId = crypto.randomUUID();\nconst callbackToken = crypto.randomBytes(32).toString('hex');\nconst timeoutMinutes = parseInt($json.timeout_minutes, 10);\nconst now = new Date();\nconst expiresAt = new Date(now.getTime() + timeoutMinutes * 60 * 1000);\nconst callbackExpiresAt = new Date(now.getTime() + (timeoutMinutes + 60) * 60 * 1000); // extra buffer for callback\n\n// Build callback URL (webhook that Wait node will listen on)\nconst baseUrl = $getEnv('N8N_PUBLIC_URL') || $getEnv('WEBHOOK_URL') || 'http://n8n.localhost';\nconst callbackUrl = `${baseUrl}/webhook/approval/callback/${approvalId}/${callbackToken}`;\n\n// Build Telegram message with inline keyboard\nconst message = `🔔 *Approval Request*\n\n*Action:* ${$json.action_type}\n*Risk:* ${$json.risk_level.toUpperCase()}\n*Summary:* ${$json.summary}\n*Requested by:* ${$json.requested_by}\n*Workflow:* ${$json.workflow_name} (${$json.workflow_id})\n*Execution:* ${$json.execution_id}\n*Expires:* ${expiresAt.toISOString()}\n\n*Details:*\n\`\`\`json\n${JSON.stringify(JSON.parse($json.details), null, 2).slice(0, 500)}\n\`\`\``;\n\nreturn [{\n  json: {\n    approval_id: approvalId,\n    callback_token: callbackToken,\n    callback_url: callbackUrl,\n    expires_at: expiresAt.toISOString(),\n    callback_expires_at: callbackExpiresAt.toISOString(),\n    message: message,\n    approver_primary: $json.approver_primary,\n    approver_secondary: $json.approver_secondary,\n    action_type: $json.action_type,\n    summary: $json.summary,\n    details: $json.details,\n    risk_level: $json.risk_level,\n    requested_by: $json.requested_by,\n    workflow_id: $json.workflow_id,\n    workflow_name: $json.workflow_name,\n    execution_id: $json.execution_id,\n    timeout_minutes: timeoutMinutes\n  }\n}];"
+      },
+      "id": "generate-approval",
+      "name": "Generate Approval Record",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "ops",
+        "table": "approvals",
+        "columns": [
+          "id",
+          "workflow_id",
+          "workflow_name",
+          "execution_id",
+          "action_type",
+          "summary",
+          "details",
+          "risk_level",
+          "requested_by",
+          "approver_primary",
+          "approver_secondary",
+          "status",
+          "expires_at",
+          "callback_token",
+          "callback_expires_at",
+          "resume_url"
+        ],
+        "options": {}
+      },
+      "id": "insert-approval",
+      "name": "Insert Approval",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [680, 300],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.approver_primary }}",
+        "text": "={{ $json.message }}",
+        "parseMode": "Markdown",
+        "options": {
+          "reply_markup": "={{ JSON.stringify({ inline_keyboard: [[{ text: '✅ Approve', callback_data: 'approve:' + $json.approval_id + ':' + $json.callback_token }, { text: '❌ Reject', callback_data: 'reject:' + $json.approval_id + ':' + $json.callback_token }]] }) }}"
+        }
+      },
+      "id": "telegram-request",
+      "name": "Send Telegram Request",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [900, 200],
+      "credentials": {
+        "telegramApi": "telegram_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !!$json.approver_secondary }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-secondary",
+      "name": "If Secondary Approver",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.approver_secondary }}",
+        "text": "={{ $json.message + '\\n\\n_(You are the secondary approver; will be notified if primary does not respond in time.)_' }}",
+        "parseMode": "Markdown",
+        "options": {
+          "reply_markup": "={{ JSON.stringify({ inline_keyboard: [[{ text: '✅ Approve', callback_data: 'approve:' + $json.approval_id + ':' + $json.callback_token }, { text: '❌ Reject', callback_data: 'reject:' + $json.approval_id + ':' + $json.callback_token }]] }) }}"
+        }
+      },
+      "id": "telegram-secondary",
+      "name": "Notify Secondary",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1340, 100],
+      "credentials": {
+        "telegramApi": "telegram_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.timeout_minutes }}",
+        "unit": "minutes"
+      },
+      "id": "wait-decision",
+      "name": "Wait for Decision",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "approval/callback/:approvalId/:token",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "callback-webhook",
+      "name": "Approval Callback Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [900, 500]
+    },
+    {
+      "parameters": {
+        "functionCode": "const callbackData = $json.callback_query?.data || $json.data;\nconst fromId = String($json.callback_query?.from?.id || $json.from?.id || '');\n\nif (!callbackData) {\n  return [{ json: { error: 'No callback data', status: 400 } }];\n}\n\nconst [action, approvalId, token] = callbackData.split(':');\nif (!action || !approvalId || !token) {\n  return [{ json: { error: 'Invalid callback format', status: 400 } }];\n}\n\nif (!['approve', 'reject'].includes(action)) {\n  return [{ json: { error: 'Invalid action', status: 400 } }];\n}\n\nreturn [{\n  json: {\n    action: action,\n    approval_id: approvalId,\n    token: token,\n    user_id: fromId,\n    message_id: $json.callback_query?.message?.message_id,\n    chat_id: $json.callback_query?.message?.chat?.id\n  }\n}];"
+      },
+      "id": "parse-callback",
+      "name": "Parse Callback",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [1120, 500]
+    },
+    {
+      "parameters": {
+        "query": "SELECT id, status, approver_primary, approver_secondary, callback_token, callback_expires_at, expires_at FROM ops.approvals WHERE id = $1;",
+        "queryParameters": [
+          {
+            "parameter": "={{ $json.approval_id }}"
+          }
+        ],
+        "options": {}
+      },
+      "id": "get-approval",
+      "name": "Get Approval",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [1340, 500],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.length > 0 }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-exists",
+      "name": "If Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [1560, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json[0].status === 'pending' || $json[0].status === 'escalated' }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-pending",
+      "name": "If Pending",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [1780, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json[0].callback_token === $json.token && new Date($json[0].callback_expires_at) > new Date() }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-valid-token",
+      "name": "If Valid Token",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [2000, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ String($json[0].approver_primary) === $json.user_id || String($json[0].approver_secondary) === $json.user_id }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-authorized",
+      "name": "If Authorized",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [2220, 500]
+    },
+    {
+      "parameters": {
+        "query": "UPDATE ops.approvals SET status = $2, decided_by = $3, decided_at = NOW(), decision_reason = $4 WHERE id = $1;",
+        "queryParameters": [
+          {
+            "parameter": "={{ $json.approval_id }}"
+          },
+          {
+            "parameter": "={{ $json.action === 'approve' ? 'approved' : 'rejected' }}"
+          },
+          {
+            "parameter": "={{ $json.user_id }}"
+          },
+          {
+            "parameter": "={{ $json.action === 'approve' ? 'Approved via Telegram' : 'Rejected via Telegram' }}"
+          }
+        ],
+        "options": {}
+      },
+      "id": "update-approval",
+      "name": "Update Approval",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [2440, 500],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const approval = $json[0];\nconst actionText = $json.action === 'approve' ? '✅ APPROVED' : '❌ REJECTED';\nconst userName = $json.callback_query?.from?.first_name || 'User';\n\nreturn [{\n  json: {\n    approval_id: $json.approval_id,\n    action: $json.action,\n    decided_by: $json.user_id,\n    decided_at: new Date().toISOString(),\n    message: `${actionText} by ${userName} (${$json.user_id})`\n  }\n}];"
+      },
+      "id": "prepare-decision-result",
+      "name": "Prepare Decision Result",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [2660, 500]
+    },
+    {
+      "parameters": {
+        "options": {
+          "respondWith": "json",
+          "respondJson": "={{ { success: true, action: $json.action, approval_id: $json.approval_id } }}"
+        }
+      },
+      "id": "respond-callback",
+      "name": "Respond Callback",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2880, 500]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { error: 'Approval not found or already decided', status: 404 } }];"
+      },
+      "id": "not-found",
+      "name": "Not Found",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { error: 'Approval no longer pending', status: 409 } }];"
+      },
+      "id": "not-pending",
+      "name": "Not Pending",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [2000, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { error: 'Invalid or expired token', status: 401 } }];"
+      },
+      "id": "invalid-token",
+      "name": "Invalid Token",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [2000, 500]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { error: 'User not authorized to decide', status: 403 } }];"
+      },
+      "id": "unauthorized",
+      "name": "Unauthorized",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [2000, 600]
+    },
+    {
+      "parameters": {
+        "options": {
+          "respondWith": "json",
+          "respondJson": "={{ { success: false, error: $json.error, status: $json.status } }}"
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2220, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Check if primary timeout occurred - escalate to secondary\nconst approval = $json[0];\nconst now = new Date();\nconst expiresAt = new Date(approval.expires_at);\n\nif (now >= expiresAt && approval.status === 'pending') {\n  // Escalate\n  return [{ json: { escalate: true, approval_id: approval.id, approver_secondary: approval.approver_secondary } }];\n}\n\nreturn [{ json: { escalate: false } }];"
+      },
+      "id": "check-timeout",
+      "name": "Check Timeout",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.escalate }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-escalate",
+      "name": "If Escalate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1.1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "query": "UPDATE ops.approvals SET status = 'escalated', escalated_at = NOW() WHERE id = $1;",
+        "queryParameters": [
+          {
+            "parameter": "={{ $json.approval_id }}"
+          }
+        ],
+        "options": {}
+      },
+      "id": "mark-escalated",
+      "name": "Mark Escalated",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [1780, 300],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.approver_secondary }}",
+        "text": "⚠️ *Escalation: Approval Timeout*\n\nPrimary approver did not respond in time.\n\n*Action:* {{ $json.action_type }}\n*Summary:* {{ $json.summary }}\n*Workflow:* {{ $json.workflow_name }}\n*Original request:* {{ $json.created_at }}\n\nPlease review and decide.",
+        "parseMode": "Markdown",
+        "options": {
+          "reply_markup": "={{ JSON.stringify({ inline_keyboard: [[{ text: '✅ Approve', callback_data: 'approve:' + $json.approval_id + ':' + $json.callback_token }, { text: '❌ Reject', callback_data: 'reject:' + $json.approval_id + ':' + $json.callback_token }]] }) }}"
+        }
+      },
+      "id": "telegram-escalation",
+      "name": "Send Escalation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1780, 100],
+      "credentials": {
+        "telegramApi": "telegram_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.escalation_timeout_min || 15 }}",
+        "unit": "minutes"
+      },
+      "id": "wait-escalation",
+      "name": "Wait Escalation",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1780, 400]
+    },
+    {
+      "parameters": {
+        "query": "UPDATE ops.approvals SET status = 'expired', decided_by = 'system', decided_at = NOW(), decision_reason = 'Double timeout (primary + secondary)' WHERE id = $1 AND status IN ('pending', 'escalated');",
+        "queryParameters": [
+          {
+            "parameter": "={{ $json.approval_id }}"
+          }
+        ],
+        "options": {}
+      },
+      "id": "mark-expired",
+      "name": "Mark Expired",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.1,
+      "position": [2000, 300],
+      "credentials": {
+        "postgres": "ops_writer_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const approval = $json[0] || {};\nconst status = approval.status || 'expired';\nconst decidedBy = approval.decided_by || 'system';\nconst reason = approval.decision_reason || 'Double timeout - safe default (reject) applied';\n\nreturn [{\n  json: {\n    approved: status === 'approved',\n    decided_by: decidedBy,\n    reason: reason,\n    status: status,\n    approval_id: $json.approval_id\n  }\n}];"
+      },
+      "id": "final-result",
+      "name": "Final Result",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1.1,
+      "position": [2220, 300]
+    }
+  ],
+  "connections": {
+    "Prepare Input": {
+      "main": [
+        [
+          {
+            "node": "Generate Approval Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Approval Record": {
+      "main": [
+        [
+          {
+            "node": "Insert Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Approval": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Secondary Approver",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Secondary Approver": {
+      "main": [
+        [
+          {
+            "node": "Notify Secondary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Send Telegram Request": {
+      "main": [
+        [
+          {
+            "node": "Wait for Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Decision": {
+      "main": [
+        [
+          {
+            "node": "Check Timeout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Timeout": {
+      "main": [
+        [
+          {
+            "node": "If Escalate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Final Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Escalate": {
+      "main": [
+        [
+          {
+            "node": "Mark Escalated",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Mark Escalated": {
+      "main": [
+        [
+          {
+            "node": "Send Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Escalation": {
+      "main": [
+        [
+          {
+            "node": "Wait Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Escalation": {
+      "main": [
+        [
+          {
+            "node": "Mark Expired",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Expired": {
+      "main": [
+        [
+          {
+            "node": "Final Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Callback Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Callback": {
+      "main": [
+        [
+          {
+            "node": "Get Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Approval": {
+      "main": [
+        [
+          {
+            "node": "If Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Exists": {
+      "main": [
+        [
+          {
+            "node": "If Pending",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Pending": {
+      "main": [
+        [
+          {
+            "node": "If Valid Token",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Valid Token": {
+      "main": [
+        [
+          {
+            "node": "If Authorized",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Authorized": {
+      "main": [
+        [
+          {
+            "node": "Update Approval",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Approval": {
+      "main": [
+        [
+          {
+            "node": "Prepare Decision Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Decision Result": {
+      "main": [
+        [
+          {
+            "node": "Respond Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Not Found": {
+      "main": [
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Not Pending": {
+      "main": [
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invalid Token": {
+      "main": [
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unauthorized": {
+      "main": [
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Callback": {
+      "main": [
+        []
+      ]
+    },
+    "Respond Error": {
+      "main": [
+        []
+      ]
+    },
+    "If Exists": {
+      "main": [
+        [],
+        []
+      ]
+    },
+    "Final Result": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "request_approval",
+  "tags": ["approvals", "human-in-the-loop", "utility"]
+}

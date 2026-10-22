@@ -1,0 +1,112 @@
+{
+  "policies": [
+    {
+      "action_type": "send_bulk_email",
+      "description": "Sending bulk emails to recipients",
+      "risk_levels": {
+        "low": {
+          "condition": "recipients_gt: 100",
+          "description": "100-1000 recipients",
+          "timeout_min": 30,
+          "escalation_min": 15
+        },
+        "medium": {
+          "condition": "recipients_gt: 1000",
+          "description": "1000-10000 recipients",
+          "timeout_min": 60,
+          "escalation_min": 30
+        },
+        "high": {
+          "condition": "recipients_gt: 10000",
+          "description": "10000+ recipients",
+          "timeout_min": 120,
+          "escalation_min": 60
+        }
+      }
+    },
+    {
+      "action_type": "delete_data",
+      "description": "Deleting database records or files",
+      "risk_levels": {
+        "low": {
+          "condition": "rows_gt: 10",
+          "description": "10-100 rows",
+          "timeout_min": 30,
+          "escalation_min": 15
+        },
+        "medium": {
+          "condition": "rows_gt: 100",
+          "description": "100-1000 rows",
+          "timeout_min": 60,
+          "escalation_min": 30
+        },
+        "high": {
+          "condition": "rows_gt: 1000",
+          "description": "1000+ rows",
+          "timeout_min": 120,
+          "escalation_min": 60
+        }
+      }
+    },
+    {
+      "action_type": "spend_money",
+      "description": "Spending budget (API credits, ads, etc.)",
+      "risk_levels": {
+        "low": {
+          "condition": "amount_usd_gt: 10",
+          "description": "$10-100",
+          "timeout_min": 30,
+          "escalation_min": 15
+        },
+        "medium": {
+          "condition": "amount_usd_gt: 100",
+          "description": "$100-1000",
+          "timeout_min": 60,
+          "escalation_min": 30
+        },
+        "high": {
+          "condition": "amount_usd_gt: 1000",
+          "description": "$1000+",
+          "timeout_min": 120,
+          "escalation_min": 60
+        }
+      }
+    },
+    {
+      "action_type": "external_api",
+      "description": "Calling external APIs",
+      "risk_levels": {
+        "low": {
+          "condition": "read-only",
+          "description": "Read-only API calls",
+          "timeout_min": 30,
+          "escalation_min": 15
+        },
+        "medium": {
+          "condition": "writes: true",
+          "description": "API calls that modify data",
+          "timeout_min": 30,
+          "escalation_min": 15
+        },
+        "high": {
+          "condition": "writes: true, critical: true",
+          "description": "Critical external mutations",
+          "timeout_min": 60,
+          "escalation_min": 30
+        }
+      }
+    },
+    {
+      "action_type": "deploy",
+      "description": "Deploying code or infrastructure",
+      "risk_levels": {
+        "high": {
+          "condition": "always",
+          "description": "Any deployment",
+          "timeout_min": 120,
+          "escalation_min": 60
+        }
+      }
+    }
+  ]
+}

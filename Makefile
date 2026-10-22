@@ -6,9 +6,9 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 COMPOSE_PROJECT_NAME ?= nexusops
-
-.PHONY: help up down logs doctor backup backup-list restore restore-test demo lint scale workers
 COMPOSE_FILE ?= compose.yaml
+
+.PHONY: help up down restart logs ps doctor backup backup-list restore restore-test demo upgrade rollback lint scale workers env-check clean
 
 help: ## Print this formatted list of targets with descriptions
 	@echo "NexusOps Management CLI"
@@ -23,11 +23,21 @@ up: ## Start the platform services (base: docker compose up -d)
 down: ## Stop and remove all platform containers
 	@docker compose -p $(COMPOSE_PROJECT_NAME) -f $(COMPOSE_FILE) down
 
-logs: ## Follow logs from running platform services
-	@docker compose -p $(COMPOSE_PROJECT_NAME) -f $(COMPOSE_FILE) logs -f
+restart: ## Restart all platform services
+	@docker compose -p $(COMPOSE_PROJECT_NAME) -f $(COMPOSE_FILE) restart
 
-doctor: ## Run diagnostic checks on system requirements and ports (Phase 10)
-	@echo "[doctor] Placeholder: Host diagnostics and port checks will be introduced in Phase 10."
+logs: ## Follow logs from running platform services (usage: make logs SERVICE=traefik)
+	@if [ -z "$(SERVICE)" ]; then \
+		docker compose -p $(COMPOSE_PROJECT_NAME) -f $(COMPOSE_FILE) logs -f; \
+	else \
+		docker compose -p $(COMPOSE_PROJECT_NAME) -f $(COMPOSE_FILE) logs -f $(SERVICE); \
+	fi
+
+ps: ## List all platform containers with status
+	@docker compose -p $(COMPOSE_PROJECT_NAME) -f $(COMPOSE_FILE) ps
+
+doctor: ## Run comprehensive health checks (Phase 10)
+	@bash scripts/doctor.sh
 
 backup: ## Trigger encrypted backup (Postgres, Qdrant, n8n data, Traefik acme)
 	@docker compose -p $(COMPOSE_PROJECT_NAME) -f $(COMPOSE_FILE) run --rm backup /scripts/backup.sh
@@ -64,6 +74,24 @@ restore-test: ## Run automated restore drill in isolated environment
 demo: ## Run end-to-end showcase workflow in mock mode (Phase 9)
 	@DEMO_MODE=mock bash scripts/demo.sh run
 
+upgrade: ## Upgrade platform (backup, pull images, recreate, doctor)
+	@echo "==> Step 1/4: Creating pre-upgrade backup..."
+	@$(MAKE) backup || (echo "Backup failed - aborting upgrade" && exit 1)
+	@echo "==> Step 2/4: Pulling latest images..."
+	@docker compose -p $(COMPOSE_PROJECT_NAME) -f $(COMPOSE_FILE) pull
+	@echo "==> Step 3/4: Recreating services..."
+	@docker compose -p $(COMPOSE_PROJECT_NAME) -f $(COMPOSE_FILE) up -d --force-recreate
+	@echo "==> Step 4/4: Running health checks..."
+	@$(MAKE) doctor
+	@echo "Upgrade complete!"
+
+rollback: ## Rollback hint (manual: restore from latest backup)
+	@echo "To rollback:"
+	@echo "  1. Stop stack: make down"
+	@echo "  2. List backups: make backup-list"
+	@echo "  3. Restore: make restore SNAPSHOT=nexusops-..."
+	@echo "  4. Start stack: make up"
+
 lint: ## Run syntax and lint checks across repository files
 	@echo "==> Running syntax and hygiene checks..."
 	@if command -v pre-commit >/dev/null 2>&1; then \
@@ -78,3 +106,17 @@ scale: ## Scale n8n workers (usage: make scale WORKERS=N)
 
 workers: ## Show n8n worker status
 	@docker compose -p $(COMPOSE_PROJECT_NAME) -f $(COMPOSE_FILE) ps n8n-worker
+
+env-check: ## Validate .env file has all required variables
+	@bash scripts/env-check.sh
+
+clean: ## Remove all containers, volumes, and networks (with confirmation)
+	@echo "⚠️  This will DELETE all data including volumes!"
+	@read -p "Type 'yes' to confirm: " confirm; \
+	if [ "$$confirm" = "yes" ]; then \
+		docker compose -p $(COMPOSE_PROJECT_NAME) -f $(COMPOSE_FILE) down -v --remove-orphans; \
+		docker volume prune -f; \
+		echo "Cleanup complete."; \
+	else \
+		echo "Cancelled."; \
+	fi

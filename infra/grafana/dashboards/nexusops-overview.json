@@ -1,0 +1,96 @@
+{
+  "dashboard": {
+    "annotations": {"list": [{"builtIn": 1, "datasource": "-- Grafana --", "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts", "type": "dashboard"}]},
+    "editable": true,
+    "gnetId": null,
+    "graphTooltip": 0,
+    "id": null,
+    "links": [],
+    "panels": [
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}, "unit": "short"}, "overrides": []},
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+        "id": 1,
+        "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "textMode": "auto", "text": {}},
+        "pluginVersion": "10.0.0",
+        "targets": [{"expr": "up{job=~\"n8n.*\"}", "legendFormat": "{{job}}", "refId": "A"}],
+        "title": "n8n Services Up",
+        "type": "stat"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 50}, {"color": "red", "value": 100}]}, "unit": "percent"}, "overrides": []},
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+        "id": 2,
+        "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "textMode": "auto", "text": {}},
+        "pluginVersion": "10.0.0",
+        "targets": [{"expr": "100 - (100 * (node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}))", "legendFormat": "Disk Usage", "refId": "A"}],
+        "title": "Host Disk Usage",
+        "type": "gauge"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}, "unit": "reqps"}, "overrides": []},
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "id": 3,
+        "options": {"legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "single"}},
+        "pluginVersion": "10.0.0",
+        "targets": [{"expr": "rate(http_requests_total{job=~\"n8n.*\"}[5m])", "legendFormat": "{{job}} - {{handler}}", "refId": "A"}],
+        "title": "n8n Request Rate (5m)",
+        "type": "timeseries"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}, "unit": "ms"}, "overrides": []},
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "id": 4,
+        "options": {"legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "single"}},
+        "pluginVersion": "10.0.0",
+        "targets": [
+          {"expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=~\"n8n.*\"}[5m])) * 1000", "legendFormat": "{{job}} p95", "refId": "A"},
+          {"expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=~\"n8n.*\"}[5m])) * 1000", "legendFormat": "{{job}} p50", "refId": "B"}
+        ],
+        "title": "n8n Request Latency (p50/p95)",
+        "type": "timeseries"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 10}, {"color": "red", "value": 50}]}, "unit": "short"}, "overrides": []},
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 4},
+        "id": 5,
+        "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "textMode": "auto", "text": {}},
+        "pluginVersion": "10.0.0",
+        "targets": [{"expr": "sum(n8n_workflow_executions_total{status=\"failed\"})", "legendFormat": "Failed Executions", "refId": "A"}],
+        "title": "Failed Executions (Total)",
+        "type": "stat"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1000}, {"color": "red", "value": 5000}]}, "unit": "short"}, "overrides": []},
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 4},
+        "id": 6,
+        "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "textMode": "auto", "text": {}},
+        "pluginVersion": "10.0.0",
+        "targets": [{"expr": "sum(n8n_queue_depth) by (queue)", "legendFormat": "{{queue}}", "refId": "A"}],
+        "title": "Queue Depth",
+        "type": "stat"
+      }
+    ],
+    "refresh": "30s",
+    "schemaVersion": 38,
+    "style": "dark",
+    "tags": ["nexusops", "overview"],
+    "templating": {"list": []},
+    "time": {"from": "now-1h", "to": "now"},
+    "timepicker": {},
+    "timezone": "utc",
+    "title": "NexusOps Overview",
+    "uid": "nexusops-overview",
+    "version": 1,
+    "weekStart": ""
+  },
+  "folderId": 0,
+  "message": "Provisioned by NexusOps",
+  "overwrite": true
+}

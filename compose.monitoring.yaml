@@ -1,0 +1,122 @@
+# AutoForge / NexusOps - Monitoring Profile (Optional)
+# Usage: COMPOSE_FILE=compose.yaml:compose.monitoring.yaml docker compose up -d
+# Provides: Uptime Kuma (status pages), Prometheus + Grafana (metrics)
+
+services:
+  # --------------------------------------------------------------------------
+  # Uptime Kuma - Self-hosted status page / uptime monitoring
+  # --------------------------------------------------------------------------
+  uptime-kuma:
+    image: "louislam/uptime-kuma:1.23.16"
+    container_name: nexusops_uptime_kuma
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - "uptime_kuma_data:/app/data"
+    networks:
+      - edge
+    profiles: ["monitoring"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # --------------------------------------------------------------------------
+  # Prometheus - Metrics collection (if N8N_METRICS=true)
+  # --------------------------------------------------------------------------
+  prometheus:
+    image: "prom/prometheus:v2.55.1"
+    container_name: nexusops_prometheus
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - "./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+      - "prometheus_data:/prometheus"
+    networks:
+      - app
+      - edge
+    profiles: ["monitoring"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # --------------------------------------------------------------------------
+  # Grafana - Dashboards and visualization
+  # --------------------------------------------------------------------------
+  grafana:
+    image: "grafana/grafana:11.1.4"
+    container_name: nexusops_grafana
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: "grafana-piechart-panel"
+    volumes:
+      - "grafana_data:/var/lib/grafana"
+      - "./infra/grafana/provisioning:/etc/grafana/provisioning:ro"
+      - "./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro"
+    networks:
+      - edge
+    depends_on:
+      - prometheus
+    profiles: ["monitoring"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  uptime_kuma_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  edge:
+    external: true
+    name: nexusops_edge
+  app:
+    external: true
+    name: nexusops_app
+
+# --------------------------------------------------------------------------
+# Uptime Kuma Monitors to Create (Manual or via API)
+# --------------------------------------------------------------------------
+# 1. n8n Main UI:        HTTP(s) -> https://n8n.${DOMAIN} (expect 200)
+# 2. n8n Webhook:        HTTP(s) -> https://n8n.${DOMAIN}/webhook/health (expect 200)
+# 3. Traefik Dashboard:  HTTP(s) -> https://traefik.${DOMAIN} (expect 200, auth)
+# 4. Qdrant:             HTTP(s) -> https://qdrant.${DOMAIN}/healthz (expect 200)
+# 5. PostgreSQL:         TCP -> postgres:5432
+# 6. Redis:              TCP -> redis:6379
+# 7. Backup Service:     HTTP -> http://backup:3000/health (internal)
+#
+# Prometheus Scrape Targets (if N8N_METRICS=true):
+# - n8n-main:      http://n8n-main:5678/metrics
+# - n8n-webhook:   http://n8n-webhook:5678/metrics
+# - n8n-worker:    http://n8n-worker:5678/metrics
+# - postgres:      (use postgres_exporter)
+# - redis:         (use redis_exporter)
+# - qdrant:        http://qdrant:6333/metrics
+# - traefik:       http://traefik:8080/metrics (if enabled)
+# - cadvisor:      (optional, container metrics)
+#
+# Grafana Dashboards (provisioned):
+# - infra/grafana/dashboards/nexusops-overview.json
+# - infra/grafana/dashboards/nexusops-n8n.json
+# - infra/grafana/dashboards/nexusops-infra.json

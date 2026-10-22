@@ -1,0 +1,110 @@
+# Prometheus configuration for NexusOps
+# Scrapes metrics from n8n, Traefik, Qdrant, and infrastructure
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    cluster: 'nexusops'
+    environment: '${ENVIRONMENT:-production}'
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+scrape_configs:
+  # ----------------------------------------------------------------------
+  # n8n metrics (requires N8N_METRICS=true and N8N_METRICS_PREFIX=n8n)
+  # ----------------------------------------------------------------------
+  - job_name: 'n8n-main'
+    static_configs:
+      - targets: ['n8n-main:5678']
+        labels:
+          service: 'n8n-main'
+          component: 'workflow-engine'
+
+  - job_name: 'n8n-webhook'
+    static_configs:
+      - targets: ['n8n-webhook:5678']
+        labels:
+          service: 'n8n-webhook'
+          component: 'webhook-processor'
+
+  - job_name: 'n8n-worker'
+    static_configs:
+      - targets: ['n8n-worker:5678']
+        labels:
+          service: 'n8n-worker'
+          component: 'worker'
+
+  # ----------------------------------------------------------------------
+  # Traefik metrics (enable with --metrics.prometheus=true)
+  # ----------------------------------------------------------------------
+  - job_name: 'traefik'
+    static_configs:
+      - targets: ['traefik:8080']
+        labels:
+          service: 'traefik'
+          component: 'reverse-proxy'
+
+  # ----------------------------------------------------------------------
+  # Qdrant metrics
+  # ----------------------------------------------------------------------
+  - job_name: 'qdrant'
+    static_configs:
+      - targets: ['qdrant:6333']
+        labels:
+          service: 'qdrant'
+          component: 'vector-db'
+
+  # ----------------------------------------------------------------------
+  # PostgreSQL metrics (requires postgres_exporter)
+  # ----------------------------------------------------------------------
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+        labels:
+          service: 'postgres'
+          component: 'database'
+    # Note: Use postgres_exporter sidecar for actual metrics
+
+  # ----------------------------------------------------------------------
+  # Redis metrics (requires redis_exporter)
+  # ----------------------------------------------------------------------
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+        labels:
+          service: 'redis'
+          component: 'cache'
+    # Note: Use redis_exporter sidecar for actual metrics
+
+  # ----------------------------------------------------------------------
+  # Node exporter (host metrics) - optional
+  # ----------------------------------------------------------------------
+  - job_name: 'node'
+    static_configs:
+      - targets: ['host.docker.internal:9100']
+        labels:
+          service: 'node-exporter'
+          component: 'host'
+
+  # ----------------------------------------------------------------------
+  # Cadvisor (container metrics) - optional
+  # ----------------------------------------------------------------------
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          service: 'cadvisor'
+          component: 'container-metrics'
+
+  # ----------------------------------------------------------------------
+  # Prometheus self-monitoring
+  # ----------------------------------------------------------------------
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

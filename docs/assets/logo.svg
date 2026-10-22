@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- NexusOps Logo: Geometric forge/anvil + flow nodes -->
+  <!-- Works on light and dark backgrounds -->
+  <defs>
+    <!-- Gradients for light/dark adaptability -->
+    <linearGradient id="primaryGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#7c3aed" stop-opacity="1"/>
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#06b6d4" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="1"/>
+    </linearGradient>
+    <!-- Glow filter for dark mode visibility -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background circle (subtle, works on both backgrounds) -->
+  <circle cx="64" cy="64" r="60" fill="none" stroke="url(#primaryGradient)" stroke-width="2" opacity="0.3"/>
+
+  <!-- Anvil/Forge base (geometric) -->
+  <path d="M34 82 L34 94 L94 94 L94 82 Z" fill="url(#primaryGradient)" opacity="0.9"/>
+  <path d="M28 82 L28 88 L100 88 L100 82 Z" fill="url(#accentGradient)" opacity="0.7"/>
+
+  <!-- Flow nodes (three connected circles representing n8n nodes) -->
+  <g filter="url(#glow)">
+    <!-- Node 1: Trigger -->
+    <circle cx="38" cy="50" r="12" fill="url(#primaryGradient)" stroke="white" stroke-width="1.5"/>
+    <path d="M38 42 L38 46 M34 48 L32 48 M42 48 L44 48" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
+
+    <!-- Connection line -->
+    <path d="M50 50 L70 50" stroke="url(#accentGradient)" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.8">
+      <animate attributeName="stroke-dashoffset" from="40" to="0" dur="2s" repeatCount="indefinite"/>
+    </path>
+
+    <!-- Node 2: Process -->
+    <circle cx="82" cy="50" r="12" fill="url(#accentGradient)" stroke="white" stroke-width="1.5"/>
+    <rect x="76" y="44" width="12" height="12" rx="2" fill="white" opacity="0.9"/>
+
+    <!-- Connection line -->
+    <path d="M94 50 L114 50" stroke="url(#primaryGradient)" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.8">
+      <animate attributeName="stroke-dashoffset" from="40" to="0" dur="2s" repeatCount="indefinite"/>
+    </path>
+
+    <!-- Node 3: Output -->
+    <circle cx="126" cy="50" r="12" fill="#06b6d4" stroke="white" stroke-width="1.5"/>
+    <path d="M126 42 L126 46 M122 48 L120 48 M130 48 L132 48" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
+  </g>
+
+  <!-- Nexus ring (subtle orbit) -->
+  <circle cx="64" cy="64" r="42" fill="none" stroke="url(#primaryGradient)" stroke-width="1" stroke-dasharray="8 4" opacity="0.4">
+    <animateTransform attributeName="transform" type="rotate" from="0 64 64" to="360 64 64" dur="20s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Version badge (optional, can be removed) -->
+  <text x="64" y="118" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="600" fill="currentColor" opacity="0.5">v1.0.0</text>
+</svg>

@@ -48,3 +48,12 @@ Thumbs.db
 # Temporary files
 tmp/
 .tmp/
+
+# Screenshots & demo assets (generated, large binaries)
+docs/assets/screenshots/*.png
+docs/assets/screenshots/*.jpg
+docs/assets/screenshots/*.jpeg
+docs/assets/demo.gif
+docs/assets/demo.mp4
+!docs/assets/screenshots/.gitkeep
+!docs/assets/screenshots/README.md

@@ -1,0 +1,23 @@
+{
+  "ignorePatterns": [
+    "http://localhost*",
+    "https://localhost*",
+    "http://n8n.localhost*",
+    "https://n8n.localhost*",
+    "http://traefik.localhost*",
+    "https://traefik.localhost*",
+    "http://qdrant.localhost*",
+    "https://qdrant.localhost*",
+    "https://github.com/YOUR_USERNAME*"
+  ],
+  "replacementPatterns": [
+    {
+      "pattern": "YOUR_USERNAME",
+      "replacement": "nexusops"
+    }
+  ],
+  "aliveStatusCodes": [200, 301, 302],
+  "retryOn429": true,
+  "retryCount": 3,
+  "fallbackToHTTP": true
+}

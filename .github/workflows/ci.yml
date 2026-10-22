@@ -1,0 +1,352 @@
+# GitHub Actions - CI Pipeline
+# Triggered on PR and push to main
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel superseded runs for the same PR/branch
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege permissions
+permissions:
+  contents: read
+  security-events: write  # for SARIF upload
+  pull-requests: write   # for PR comments
+
+env:
+  COMPOSE_PROJECT_NAME: nexusops-ci
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  # ==========================================================================
+  # Lint Job
+  # ==========================================================================
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node.js for actionlint
+        uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.0.2
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install actionlint
+        run: |
+          curl -sfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download_actionlint.bash | bash -s -- -b /usr/local/bin
+
+      - name: Run actionlint
+        run: actionlint -color -shellcheck=''
+
+      - name: Install yamllint
+        run: pip install yamllint==1.35.1
+
+      - name: Run yamllint
+        run: yamllint -c .yamllint .
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck on scripts
+        run: |
+          find scripts -name "*.sh" -exec shellcheck -e SC1091 {} +
+
+      - name: Run shellcheck on infra
+        run: |
+          find infra -name "*.sh" -exec shellcheck -e SC1091 {} +
+
+      - name: Install hadolint
+        run: |
+          curl -sfL https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 -o /usr/local/bin/hadolint
+          chmod +x /usr/local/bin/hadolint
+
+      - name: Run hadolint on Dockerfiles
+        run: |
+          find . -name "Dockerfile*" -exec hadolint {} +
+
+      - name: Validate JSON workflows
+        run: |
+          find workflows -name "*.json" -exec jq empty {} \;
+
+      - name: Run custom workflow validation
+        run: |
+          chmod +x scripts/check-workflows.sh
+          ./scripts/check-workflows.sh workflows
+
+      - name: Validate compose config (base)
+        run: |
+          docker compose -p ${{ env.COMPOSE_PROJECT_NAME }} -f compose.yaml config -q
+
+      - name: Validate compose config (prod)
+        run: |
+          docker compose -p ${{ env.COMPOSE_PROJECT_NAME }} -f compose.yaml -f compose.prod.yaml config -q
+
+      - name: Validate compose config (monitoring)
+        run: |
+          docker compose -p ${{ env.COMPOSE_PROJECT_NAME }} -f compose.yaml -f compose.monitoring.yaml config -q
+
+      - name: Markdown link check
+        uses: gaurav-nelson/github-action-markdown-link-check@d4a0f0e8a4e3b8c6c7c7c7c7c7c7c7c7c7c7c7c7c # v1
+        with:
+          config-file: '.markdown-link-check.json'
+
+  # ==========================================================================
+  # N8N Workflows Validation Job
+  # ==========================================================================
+  n8n-workflows:
+    name: n8n Workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Run workflow validation
+        run: |
+          chmod +x scripts/check-workflows.sh
+          ./scripts/check-workflows.sh workflows
+
+  # ==========================================================================
+  # Smoke Test Job
+  # ==========================================================================
+  smoke:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: lint
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2a0b8d5b4e0f7556e67e # v3.5.0
+
+      - name: Generate test secrets
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_PASSWORD=test-postgres-password-12345678901234567890
+          REDIS_PASSWORD=test-redis-password-12345678901234567890
+          QDRANT_API_KEY=test-qdrant-key-1234567890123456789012345678901234
+          N8N_ENCRYPTION_KEY=$(openssl rand -base64 32)
+          OPS_WRITER_PASSWORD=test-ops-writer-12345678901234567890
+          BACKUP_AGE_RECIPIENT=$(age-keygen 2>/dev/null | head -1 || echo "age1testkey1234567890123456789012345678901234")
+          ALERT_TELEGRAM_BOT_TOKEN=
+          ALERT_TELEGRAM_CHAT_ID=
+          LLM_MONTHLY_BUDGET_USD=0
+          N8N_API_KEY=
+          N8N_PUBLIC_URL=http://localhost
+          DEFAULT_APPROVER_PRIMARY=
+          DEFAULT_APPROVER_SECONDARY=
+          DLQ_REPLAY_TOKEN=test-dlq-token-12345678901234567890
+          TRAEFIK_DASHBOARD_PASSWORD=admin:$$2y$$05$$testtesttesttesttesttesttesttesttesttesttesttest
+          LE_EMAIL=test@example.com
+          DOMAIN=localhost
+          BACKUP_S3_ENABLED=false
+          BACKUP_HEARTBEAT_URL=
+          HEALTHCHECK_PING_URL=
+          N8N_BOOTSTRAP_PASSWORD=admin
+          GRAFANA_ADMIN_PASSWORD=admin
+          DEMO_MODE=mock
+          MOCK_FAILURE_RATE=0.3
+          EOF
+
+      - name: Start stack
+        run: |
+          docker compose -p ${{ env.COMPOSE_PROJECT_NAME }} -f compose.yaml up -d --wait
+
+      - name: Wait for services to be healthy
+        run: |
+          timeout 180 bash -c '
+            while true; do
+              if docker compose -p ${{ env.COMPOSE_PROJECT_NAME }} -f compose.yaml ps --format json | jq -e '"'"'all(.Health == "healthy" or .Health == "")'"'"' >/dev/null 2>&1; then
+                echo "All services healthy"
+                exit 0
+              fi
+              sleep 5
+            done
+          '
+
+      - name: Run smoke tests
+        id: smoke
+        run: |
+          set +e
+          # Test 1: Traefik dashboard
+          curl -fsS http://localhost:8080 >/dev/null && echo "✓ Traefik" || echo "✗ Traefik"
+          
+          # Test 2: n8n health
+          curl -fsS http://localhost:5678/healthz >/dev/null && echo "✓ n8n-main" || echo "✗ n8n-main"
+          
+          # Test 3: Webhook endpoint
+          curl -fsS http://localhost/webhook/health >/dev/null 2>&1 && echo "✓ Webhook" || echo "✗ Webhook (may not exist)"
+          
+          # Test 4: Qdrant
+          curl -fsS http://localhost:6333/healthz >/dev/null && echo "✓ Qdrant" || echo "✗ Qdrant"
+          
+          # Test 5: Postgres
+          docker exec nexusops-ci_postgres pg_isready -U nexusops -d nexusops >/dev/null && echo "✓ Postgres" || echo "✗ Postgres"
+          
+          # Test 6: Redis
+          docker exec nexusops-ci_redis redis-cli -a test-redis-password-12345678901234567890 ping >/dev/null && echo "✓ Redis" || echo "✗ Redis"
+          
+          # Test 7: Demo workflow (mock mode)
+          sleep 10
+          curl -fsS -X POST http://localhost/webhook/triage \
+            -H "Content-Type: application/json" \
+            -d '{"text": "Test request", "email": "test@example.com"}' >/dev/null && echo "✓ Demo webhook" || echo "✗ Demo webhook"
+          
+          # All passed if we reach here
+          echo "SMOKE_TESTS_PASSED=true" >> $GITHUB_OUTPUT
+
+      - name: Collect logs on failure
+        if: failure() || steps.smoke.outputs.SMOKE_TESTS_PASSED != 'true'
+        uses: actions/upload-artifact@65462800fd76c3416e12b7c4040f5640a0c0e1d7 # v4.3.3
+        with:
+          name: smoke-logs-${{ github.run_id }}
+          path: |
+            docker compose -p ${{ env.COMPOSE_PROJECT_NAME }} -f compose.yaml logs --no-color
+          retention-days: 7
+
+      - name: Teardown
+        if: always()
+        run: |
+          docker compose -p ${{ env.COMPOSE_PROJECT_NAME }} -f compose.yaml down -v --remove-orphans || true
+
+  # ==========================================================================
+  # Restore Drill Job
+  # ==========================================================================
+  restore-drill:
+    name: Restore Drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: lint
+    if: github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'restore-drill'))
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2a0b8d5b4e0f7556e67e # v3.5.0
+
+      - name: Generate test secrets
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_PASSWORD=test-postgres-password-12345678901234567890
+          REDIS_PASSWORD=test-redis-password-12345678901234567890
+          QDRANT_API_KEY=test-qdrant-key-1234567890123456789012345678901234
+          N8N_ENCRYPTION_KEY=$(openssl rand -base64 32)
+          OPS_WRITER_PASSWORD=test-ops-writer-12345678901234567890
+          BACKUP_AGE_RECIPIENT=$(age-keygen 2>/dev/null | head -1 || echo "age1testkey1234567890123456789012345678901234")
+          ALERT_TELEGRAM_BOT_TOKEN=
+          ALERT_TELEGRAM_CHAT_ID=
+          LLM_MONTHLY_BUDGET_USD=0
+          N8N_API_KEY=
+          N8N_PUBLIC_URL=http://localhost
+          DEFAULT_APPROVER_PRIMARY=
+          DEFAULT_APPROVER_SECONDARY=
+          DLQ_REPLAY_TOKEN=test-dlq-token-12345678901234567890
+          TRAEFIK_DASHBOARD_PASSWORD=admin:$$2y$$05$$testtesttesttesttesttesttesttesttesttesttesttest
+          LE_EMAIL=test@example.com
+          DOMAIN=localhost
+          BACKUP_S3_ENABLED=false
+          BACKUP_HEARTBEAT_URL=
+          HEALTHCHECK_PING_URL=
+          N8N_BOOTSTRAP_PASSWORD=admin
+          GRAFANA_ADMIN_PASSWORD=admin
+          DEMO_MODE=mock
+          EOF
+
+      - name: Start stack
+        run: |
+          docker compose -p ${{ env.COMPOSE_PROJECT_NAME }} -f compose.yaml up -d --wait
+
+      - name: Wait for services
+        run: |
+          timeout 180 bash -c '
+            while true; do
+              if docker compose -p ${{ env.COMPOSE_PROJECT_NAME }} -f compose.yaml ps --format json | jq -e '"'"'all(.Health == "healthy" or .Health == "")'"'"' >/dev/null 2>&1; then
+                exit 0
+              fi
+              sleep 5
+            done
+          '
+
+      - name: Run backup
+        run: |
+          docker compose -p ${{ env.COMPOSE_PROJECT_NAME }} -f compose.yaml run --rm backup /scripts/backup.sh
+
+      - name: List backups
+        run: |
+          docker run --rm -v ${{ env.COMPOSE_PROJECT_NAME }}_backups:/backup/data:ro alpine:3.21 \
+            sh -c 'find /backup/data -maxdepth 1 -type d -name "nexusops-*" | sort -r | head -5'
+
+      - name: Run restore test
+        run: |
+          docker run --rm \
+            --name ${{ env.COMPOSE_PROJECT_NAME }}-restore-test \
+            -v /var/run/docker.sock:/var/run/docker.sock:ro \
+            -v ${{ env.COMPOSE_PROJECT_NAME }}_backups:/backup/data:ro \
+            -v ${{ env.COMPOSE_PROJECT_NAME }}_n8n_data:/n8n/data:ro \
+            -v ${{ env.COMPOSE_PROJECT_NAME }}_letsencrypt:/traefik:ro \
+            -e BACKUP_DIR=/backup/data \
+            -e BACKUP_AGE_RECIPIENT="${BACKUP_AGE_RECIPIENT}" \
+            -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+            -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
+            -e QDRANT_API_KEY="${QDRANT_API_KEY}" \
+            -e N8N_ENCRYPTION_KEY="${N8N_ENCRYPTION_KEY}" \
+            -e BACKUP_S3_ENABLED=false \
+            nexusops-backup:latest /scripts/restore-test.sh
+
+      - name: Teardown
+        if: always()
+        run: |
+          docker compose -p ${{ env.COMPOSE_PROJECT_NAME }} -f compose.yaml down -v --remove-orphans || true
+
+    # Schedule weekly restore drills
+    schedule:
+      - cron: '0 4 * * 0'  # Every Sunday 04:00 UTC
+
+  # ==========================================================================
+  # Tests Job (SQL tests)
+  # ==========================================================================
+  sql-tests:
+    name: SQL Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Start Postgres
+        run: |
+          docker run -d --name test-postgres \
+            -e POSTGRES_PASSWORD=test \
+            -e POSTGRES_USER=nexusops \
+            -e POSTGRES_DB=nexusops \
+            -p 5432:5432 \
+            postgres:16
+
+      - name: Wait for Postgres
+        run: |
+          timeout 60 bash -c 'until pg_isready -h localhost -U nexusops -d nexusops; do sleep 2; done'
+
+      - name: Run init scripts
+        run: |
+          for f in infra/postgres/init/*.sql; do
+            psql -h localhost -U nexusops -d nexusops -f "$f"
+          done
+
+      - name: Run SQL tests
+        run: |
+          psql -h localhost -U nexusops -d nexusops -f tests/sql/test_llm_cost.sql

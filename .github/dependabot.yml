@@ -1,0 +1,65 @@
+# Dependabot Configuration
+# Updates GitHub Actions, Docker base images, and compose image tags
+
+version: 2
+
+updates:
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci(deps)"
+    open-pull-requests-limit: 10
+
+  # Docker base images in Dockerfiles
+  - package-ecosystem: "docker"
+    directory: "/infra/backup"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:30"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "ci(deps)"
+
+  - package-ecosystem: "docker"
+    directory: "/infra/mock-llm"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:30"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "ci(deps)"
+
+  # Compose image tags (custom - we'll use a script)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:00"
+    labels:
+      - "dependencies"
+      - "docker-compose"
+    commit-message:
+      prefix: "ci(deps)"
+    # Only update specific files
+    allow:
+      - match-type: "file"
+        match-pattern: "compose.yaml"
+      - match-type: "file"
+        match-pattern: "compose.prod.yaml"
+      - match-type: "file"
+        match-pattern: "compose.monitoring.yaml"
